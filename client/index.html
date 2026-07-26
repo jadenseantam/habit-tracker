@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Habit Tracker</title>
+  <style>
+    :root {
+      --bg-app: #080c14;
+      --bg-sidebar: #0f1422;
+      --bg-card: #151b2c;
+      --bg-input: #0b0f19;
+      --text-main: #f3f4f6;
+      --text-muted: #717d96;
+      --accent-primary: #3b82f6;
+      --accent-hover: #1d4ed8;
+      --accent-success: #10b981;
+      --accent-error: #ef4444;
+      --border-color: #1e293b;
+      
+      --radius-circle: 50%;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --shadow-premium: 0 12px 30px -10px rgba(0, 0, 0, 0.5);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg-app);
+      color: var(--text-main);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      display: flex;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* --- SIDEBAR PANEL (RESPONSIVE) --- */
+    .sidebar {
+      width: 250px;
+      background-color: var(--bg-sidebar);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      padding: 30px 20px;
+      flex-shrink: 0;
+      transition: all 0.3s ease;
+    }
+
+    .brand {
+      font-size: 1.4rem;
+      font-weight: 800;
+      margin-bottom: 35px;
+      padding-left: 10px;
+      letter-spacing: 0.5px;
+      background: linear-gradient(to right, #3b82f6, #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .nav-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex-grow: 1;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      padding: 14px 16px;
+      color: var(--text-muted);
+      border-radius: var(--radius-md);
+      font-weight: 600;
+      cursor: pointer;
+      background: transparent;
+      border: none;
+      width: 100%;
+      text-align: left;
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
+    }
+
+    .nav-item:hover {
+      background-color: rgba(255, 255, 255, 0.03);
+      color: var(--text-main);
+    }
+
+    .nav-item.active {
+      background-color: var(--accent-primary);
+      color: var(--text-main);
+      box-shadow: 0 8px 20px -6px rgba(59, 130, 246, 0.5);
+    }
+
+    .sidebar-footer {
+      border-top: 1px solid var(--border-color);
+      padding-top: 20px;
+    }
+
+    .user-profile {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.95rem;
+      margin-bottom: 15px;
+    }
+
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-circle);
+      background-color: var(--accent-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    /* --- MAIN WORKSPACE --- */
+    .main-content {
+      flex-grow: 1;
+      padding: 40px;
+      overflow-y: auto;
+      width: 100%;
+    }
+
+    .header-bar h1 {
+      margin: 0 0 30px 0;
+      font-size: 2rem;
+      font-weight: 800;
+    }
+
+    /* --- STATS & CARDS LAYOUT --- */
+    .stats-row {
+      display: grid;
+      grid-template-columns: minmax(280px, 400px);
+      gap: 24px;
+      margin-bottom: 30px;
+    }
+
+    .stat-card {
+      background-color: var(--bg-card);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.02);
+      box-shadow: var(--shadow-premium);
+      text-align: center;
+    }
+
+    .stat-label {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+
+    .stat-value {
+      font-size: 2.2rem;
+      font-weight: 800;
+    }
+
+    .widget-card {
+      background-color: var(--bg-card);
+      border-radius: var(--radius-lg);
+      padding: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.02);
+      box-shadow: var(--shadow-premium);
+      width: 100%;
+    }
+
+    .widget-card h2 {
+      margin-top: 0;
+      margin-bottom: 24px;
+      font-size: 1.2rem;
+      font-weight: 700;
+    }
+
+    /* --- RESPONSIVE TABLE --- */
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      min-width: 500px;
+    }
+
+    th {
+      text-align: left;
+      padding: 14px 16px;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      border-bottom: 2px solid var(--border-color);
+    }
+
+    td {
+      padding: 16px;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 0.95rem;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* --- FORM CONTROLS --- */
+    .form-unit {
+      margin-bottom: 24px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    select, input {
+      width: 100%;
+      padding: 14px;
+      background-color: var(--bg-input);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      color: white;
+      font-size: 1rem;
+      transition: border-color 0.2s;
+    }
+
+    select:focus, input:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+    }
+
+    .btn-action {
+      padding: 14px;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.2s ease;
+    }
+
+    .btn-green { background-color: var(--accent-success); color: white; }
+    .btn-green:hover { background-color: #0c9468; }
+
+    .btn-red { background-color: var(--accent-error); color: white; }
+    .btn-red:hover { background-color: #b91c1c; }
+
+    .admin-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 24px;
+    }
+
+    .auth-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100vw;
+      height: 100vh;
+      padding: 20px;
+    }
+
+    .hidden { display: none !important; }
+
+    /* --- RESPONSIVE MEDIA QUERIES --- */
+    @media (max-width: 900px) {
+      .admin-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 768px) {
+      body {
+        flex-direction: column;
+      }
+
+      #app-workspace {
+        flex-direction: column !important;
+      }
+
+      .sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+        padding: 16px 20px;
+      }
+
+      .brand {
+        margin-bottom: 15px;
+      }
+
+      .nav-group {
+        flex-direction: row;
+        overflow-x: auto;
+        padding-bottom: 8px;
+      }
+
+      .nav-item {
+        white-space: nowrap;
+        justify-content: center;
+      }
+
+      .sidebar-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 1px solid var(--border-color);
+        margin-top: 10px;
+        padding-top: 12px;
+      }
+
+      .user-profile {
+        margin-bottom: 0;
+      }
+
+      .main-content {
+        padding: 20px;
+      }
+
+      .stats-row {
+        grid-template-columns: 1fr;
+      }
+
+      .widget-card {
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="view-auth" class="auth-container">
+    <div class="widget-card" style="max-width: 380px; padding: 40px;">
+      <h1 id="auth-title" style="text-align: center; font-size: 1.6rem; margin-top: 0; margin-bottom: 30px;">Login</h1>
+      <div class="form-unit"><label>Username</label><input type="text" id="auth-username" autocomplete="off"></div>
+      <div class="form-unit"><label>Password</label><input type="password" id="auth-password"></div>
+      <button class="btn-action btn-green" style="background-color: var(--accent-primary);" id="auth-submit-btn">Login</button>
+      <span style="font-size: 0.85rem; color: var(--accent-primary); cursor: pointer; text-decoration: underline; display: block; text-align: center; margin-top: 20px;" id="auth-toggle">Create standard account</span>
+    </div>
+  </div>
+
+  <div id="app-workspace" class="hidden" style="display: flex; width: 100%;">
+    
+    <aside class="sidebar">
+      <div class="brand">Habit Tracker</div>
+      <nav class="nav-group">
+        <button class="nav-item active" id="menu-dash">Dashboard</button>
+        <button class="nav-item" id="menu-start">Track Habits</button>
+        <button class="nav-item hidden" style="background-color: rgba(245, 158, 11, 0.08); color: #f59e0b;" id="menu-admin">🛡️ Admin Panel</button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="user-profile">
+          <div class="avatar" id="user-avatar">-</div>
+          <div id="user-display-name">User</div>
+        </div>
+        <button class="nav-item" style="color: var(--accent-error); width: auto; padding: 8px 12px;" id="logout-btn">Logout</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="header-bar">
+        <h1 id="current-view-title">Dashboard</h1>
+      </div>
+
+      <div id="panel-dashboard">
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-label">Total Habits Logged</div>
+            <div class="stat-value" id="dashboard-score-count">0</div>
+          </div>
+        </div>
+
+        <div class="widget-card">
+          <h2>📊 Activity Log Timeline</h2>
+          <div class="table-container">
+            <table>
+              <thead><tr><th>Habit Event</th><th>Context/Details</th><th>Logged At</th><th>Duration</th></tr></thead>
+              <tbody id="logs-insertion-point"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="panel-start" class="hidden">
+        <div class="widget-card" style="max-width: 520px; padding: 35px;">
+          <h2 id="session-heading-text" style="margin-bottom: 25px;">Configure Session</h2>
+          <div class="form-unit">
+            <label>Select Habit:</label>
+            <select id="event-selector"></select>
+          </div>
+          <div class="form-unit">
+            <label>Session Notes / Details</label>
+            <input type="text" id="hw-details-field" placeholder="e.g., Run 5km, read 2 chapters">
+          </div>
+          <button class="btn-action btn-green" id="action-trigger-btn">Start Session</button>
+        </div>
+      </div>
+
+      <div id="panel-admin" class="hidden">
+        <div class="admin-grid">
+          <div class="widget-card">
+            <h2>Registered Accounts</h2>
+            <div class="table-container">
+              <table>
+                <thead><tr><th>ID</th><th>Username</th><th>Role</th></tr></thead>
+                <tbody id="admin-users-table"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="widget-card">
+            <h2>Inject Custom Habit</h2>
+            <div class="form-unit">
+              <label>Habit Title</label>
+              <input type="text" id="new-event-name-input" placeholder="e.g., Coding, Meditation">
+            </div>
+            <button class="btn-action btn-green" style="background-color: var(--accent-primary);" id="add-event-submit-btn">Add Option</button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    const API_BASE_URL = 'http://localhost:5000';
+    let activeTrackingState = false, initialTimestamp = null, authMode = 'login';
+    let currentUser = JSON.parse(localStorage.getItem('habit_tracker_user')) || null;
+
+    const viewAuth = document.getElementById('view-auth'), appWorkspace = document.getElementById('app-workspace');
+    const panelDashboard = document.getElementById('panel-dashboard'), panelStart = document.getElementById('panel-start'), panelAdmin = document.getElementById('panel-admin');
+    
+    const menuDash = document.getElementById('menu-dash'), menuStart = document.getElementById('menu-start'), menuAdmin = document.getElementById('menu-admin');
+    const eventSelector = document.getElementById('event-selector'), hwDetailsField = document.getElementById('hw-details-field');
+    const actionTriggerBtn = document.getElementById('action-trigger-btn'), sessionHeadingText = document.getElementById('session-heading-text');
+
+    function routeView(targetView) {
+      if (!currentUser) {
+        viewAuth.classList.remove('hidden');
+        appWorkspace.classList.add('hidden');
+        return;
+      }
+      viewAuth.classList.add('hidden');
+      appWorkspace.classList.remove('hidden');
+
+      [menuDash, menuStart, menuAdmin].forEach(b => b.classList.remove('active'));
+      [panelDashboard, panelStart, panelAdmin].forEach(p => p.classList.add('hidden'));
+
+      if (currentUser.role === 'admin') menuAdmin.classList.remove('hidden');
+      else menuAdmin.classList.add('hidden');
+
+      document.getElementById('user-display-name').textContent = currentUser.username;
+      document.getElementById('user-avatar').textContent = currentUser.username.charAt(0).toUpperCase();
+
+      if (targetView === 'dashboard') {
+        menuDash.classList.add('active');
+        panelDashboard.classList.remove('hidden');
+        document.getElementById('current-view-title').textContent = "Dashboard";
+        synchronizeHistoryLogs();
+      }
+      if (targetView === 'start') {
+        menuStart.classList.add('active');
+        panelStart.classList.remove('hidden');
+        document.getElementById('current-view-title').textContent = "Track Habits";
+        populateEventsDropdown();
+      }
+      if (targetView === 'admin') {
+        menuAdmin.classList.add('active');
+        panelAdmin.classList.remove('hidden');
+        document.getElementById('current-view-title').textContent = "🛡️ Administration Control Panel";
+        populateAdminDashboard();
+      }
+    }
+
+    menuDash.addEventListener('click', () => { if(!activeTrackingState) routeView('dashboard'); });
+    menuStart.addEventListener('click', () => routeView('start'));
+    menuAdmin.addEventListener('click', () => { if(!activeTrackingState) routeView('admin'); });
+
+    document.getElementById('auth-toggle').addEventListener('click', () => {
+      authMode = authMode === 'login' ? 'register' : 'login';
+      document.getElementById('auth-title').textContent = authMode === 'login' ? 'Login' : 'Create Account';
+      document.getElementById('auth-toggle').textContent = authMode === 'login' ? "Create standard account" : "Already have an account? Login";
+    });
+
+    document.getElementById('auth-submit-btn').addEventListener('click', async () => {
+      const username = document.getElementById('auth-username').value, password = document.getElementById('auth-password').value;
+      if (!username || !password) return alert('Fill out credentials.');
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/auth/${authMode}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username, password}) });
+        const data = await res.json();
+        if (res.ok) {
+          currentUser = { userId: data.userId, username: data.username, role: data.role };
+          localStorage.setItem('habit_tracker_user', JSON.stringify(currentUser));
+          routeView('dashboard');
+        } else alert(data.message);
+      } catch (e) { alert('Server unavailable.'); }
+    });
+
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      localStorage.removeItem('habit_tracker_user'); currentUser = null; routeView('auth');
+    });
+
+    async function populateEventsDropdown() {
+      const res = await fetch(`${API_BASE_URL}/api/events`);
+      const data = await res.json();
+      eventSelector.innerHTML = '';
+      data.forEach(ev => {
+        const opt = document.createElement('option'); opt.value = ev.name; opt.textContent = ev.name;
+        eventSelector.appendChild(opt);
+      });
+    }
+
+    actionTriggerBtn.addEventListener('click', async () => {
+      const targetEvent = eventSelector.value;
+      
+      if (!activeTrackingState) {
+        activeTrackingState = true; 
+        initialTimestamp = new Date().toISOString();
+        actionTriggerBtn.textContent = 'End Session'; 
+        actionTriggerBtn.className = 'btn-action btn-red';
+        eventSelector.disabled = true; 
+        sessionHeadingText.textContent = `🚀 Active: ${targetEvent}`;
+      } else {
+        const payload = { 
+          userId: currentUser.userId, 
+          eventType: targetEvent, 
+          details: hwDetailsField.value, 
+          startTime: initialTimestamp, 
+          endTime: new Date().toISOString() 
+        };
+        
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/activities/save`, { 
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'}, 
+            body: JSON.stringify(payload) 
+          });
+          
+          const resultData = await response.json();
+
+          if (response.ok) {
+            activeTrackingState = false; 
+            hwDetailsField.value = '';
+            actionTriggerBtn.textContent = 'Start Session'; 
+            actionTriggerBtn.className = 'btn-action btn-green';
+            eventSelector.disabled = false; 
+            sessionHeadingText.textContent = 'Configure Session';
+            routeView('dashboard');
+          } else {
+            alert(`Could not save session: ${resultData.message}`);
+          }
+        } catch (e) {
+          alert('Network communication loss while hitting endpoint.');
+        }
+      }
+    });
+
+    async function synchronizeHistoryLogs() {
+      const target = document.getElementById('logs-insertion-point');
+      target.innerHTML = '<tr><td colspan="4">Synchronizing...</td></tr>';
+      const res = await fetch(`${API_BASE_URL}/api/activities?userId=${currentUser.userId}`);
+      const data = await res.json();
+      
+      document.getElementById('dashboard-score-count').textContent = data.length;
+      target.innerHTML = data.length ? '' : '<tr><td colspan="4" style="color:var(--text-muted);">No habits recorded. Go track one!</td></tr>';
+      
+      data.forEach(r => {
+        target.innerHTML += `<tr><td><strong>${r.event_type}</strong></td><td>${r.details || '-'}</td><td>${new Date(r.start_time).toLocaleString()}</td><td>${Math.floor(r.duration_seconds/60)}m ${r.duration_seconds%60}s</td></tr>`;
+      });
+    }
+
+    async function populateAdminDashboard() {
+      const target = document.getElementById('admin-users-table');
+      const res = await fetch(`${API_BASE_URL}/api/admin/users`);
+      const users = await res.json();
+      target.innerHTML = '';
+      users.forEach(u => {
+        target.innerHTML += `<tr><td>${u.id}</td><td><strong>${u.username}</strong></td><td><code>${u.role}</code></td></tr>`;
+      });
+    }
+
+    document.getElementById('add-event-submit-btn').addEventListener('click', async () => {
+      const input = document.getElementById('new-event-name-input');
+      if (!input.value.trim()) return;
+      const res = await fetch(`${API_BASE_URL}/api/admin/events`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ eventName: input.value.trim() }) });
+      if (res.ok) { alert('New habit configuration option injected!'); input.value = ''; populateAdminDashboard(); }
+    });
+
+    routeView('dashboard');
+  </script>
+</body>
+</html>
