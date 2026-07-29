@@ -78,8 +78,9 @@ app.post('/api/activities/save', async (req, res) => {
     );
     res.json({ success: true, message: 'Session logged successfully.' });
   } catch (err) {
-    console.error('❌ Error saving session:', err);
-    res.status(500).json({ message: 'Error saving session.' });
+    console.error('❌ Database insert error:', err);
+    // Return the specific Postgres error message so you see exact cause in alert
+    res.status(500).json({ message: err.message }); 
   }
 });
 
