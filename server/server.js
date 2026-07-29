@@ -111,12 +111,21 @@ app.get('/api/admin/users', async (req, res) => {
 
 // Add New Habit Option
 app.post('/api/admin/events', async (req, res) => {
-  const { eventName } = req.body;
+  const { name, category } = req.body;
+  
+  if (!name || !category) {
+    return res.status(400).json({ message: 'Name and category are required' });
+  }
+
   try {
-    await pool.query('INSERT INTO events (name) VALUES ($1)', [eventName]);
-    res.json({ success: true });
+    const result = await pool.query(
+      'INSERT INTO events (name, category) VALUES ($1, $2) RETURNING *',
+      [name, category]
+    );
+    res.status(201).json(result.rows[0]);
   } catch (err) {
-    res.status(400).json({ message: 'Habit option already exists.' });
+    console.error('❌ Failed to inject habit:', err);
+    res.status(500).json({ message: err.message });
   }
 });
 
