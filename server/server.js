@@ -84,16 +84,27 @@ app.post('/api/activities/save', async (req, res) => {
 });
 
 // Get User Activities
-app.get('/api/activities', async (req, res) => {
-  const { userId } = req.query;
+app.post('/api/activities', async (req, res) => {
+  // Support both camelCase and snake_case from frontend
+  const userId = req.body.userId || req.body.user_id;
+  const eventId = req.body.eventId || req.body.event_id;
+
+  if (!userId || !eventId) {
+    return res.status(400).json({ 
+      message: 'Missing userId or eventId', 
+      received: req.body 
+    });
+  }
+
   try {
     const result = await pool.query(
-      'SELECT * FROM activities WHERE user_id = $1 ORDER BY start_time DESC',
-      [userId]
+      'INSERT INTO activities (user_id, event_id) VALUES ($1, $2) RETURNING *',
+      [userId, eventId]
     );
-    res.json(result.rows);
+    return res.status(201).json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ message: 'Error fetching activities.' });
+    console.error('❌ Error saving session:', err);
+    return res.status(500).json({ message: 'Error saving session', error: err.message });
   }
 });
 
