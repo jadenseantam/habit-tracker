@@ -118,31 +118,37 @@ app.get('/api/admin/users', async (req, res) => {
 
 // Add New Habit Option (FIXED: Supports eventName from frontend and matches db schema)
 // Add New Habit Option (Admin Route)
+// Add New Habit Option (Admin Route)
 app.post('/api/admin/events', async (req, res) => {
-  // Read whatever key the iOS app sends: 'eventName' or 'name' or 'habitName'
-  const eventName = req.body.eventName || req.body.name || req.body.habitName;
-
-  if (!eventName || typeof eventName !== 'string' || !eventName.trim()) {
-    return res.status(400).json({ message: 'Habit name is required.' });
-  }
-
   try {
-    // Insert into Postgres (events table has 'id' and 'name')
-    const result = await pool.query(
-      'INSERT INTO events (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING *',
-      [eventName.trim()]
-    );
+    // 1. Accept any key the frontend might send (eventName, name, or habitName)
+    const eventName = req.body.eventName || req.body.name || req.body.habitName;
 
-    // If it already existed in DB, return success so the app doesn't throw an error
-    if (result.rows.length === 0) {
-      return res.status(200).json({ message: 'Habit already exists!' });
+    if (!eventName || typeof eventName !== 'string' || !eventName.trim()) {
+      // Return 200 with an error flag so res.ok is TRUE and frontend handles it safely
+      return res.status(200).json({ success: false, message: 'Habit name is required.' });
     }
 
-    // Return the newly inserted habit object
-    return res.status(201).json(result.rows[0]);
+    const cleanName = eventName.trim();
+
+    // 2. Insert into PostgreSQL events table
+    const result = await pool.query(
+      'INSERT INTO events (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING *',
+      [cleanName]
+    );
+
+    // 3. Return HTTP 200 so res.ok is TRUE in index.html
+    if (result.rows.length === 0) {
+      // Habit already exists
+      return res.status(200).json({ success: true, message: 'Habit already exists!', name: cleanName });
+    }
+
+    return res.status(200).json({ success: true, message: 'Habit added!', event: result.rows[0] });
+
   } catch (err) {
     console.error('❌ Failed to inject habit:', err);
-    return res.status(500).json({ message: err.message });
+    // Still send HTTP 200 to prevent silent failure on the iOS frontend
+    return res.status(200).json({ success: false, message: err.message });
   }
 });
 
