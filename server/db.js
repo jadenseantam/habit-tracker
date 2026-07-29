@@ -2,18 +2,17 @@ import 'dotenv/config';
 import pg from 'pg';
 const { Pool } = pg;
 
-// Connection pool configured for Neon SSL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false, // Required for Neon PostgreSQL
+    rejectUnauthorized: false,
   },
 });
 
 export async function initDb() {
   const client = await pool.connect();
   try {
-    // 1. Users Table
+    // 1. Create tables ONLY if they don't exist yet
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -21,18 +20,12 @@ export async function initDb() {
         password VARCHAR(255) NOT NULL,
         role VARCHAR(50) DEFAULT 'user'
       );
-    `);
 
-    // 2. Events/Habits Table
-    await client.query(`
       CREATE TABLE IF NOT EXISTS events (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) UNIQUE NOT NULL
       );
-    `);
 
-    // 3. Activities Table
-    await client.query(`
       CREATE TABLE IF NOT EXISTS activities (
         id SERIAL PRIMARY KEY,
         user_id INT REFERENCES users(id) ON DELETE CASCADE,
@@ -44,14 +37,22 @@ export async function initDb() {
       );
     `);
 
-    // 4. Seed Admin Account (jadentam / Jaden0309)
+    // 2. Add missing columns safely without touching existing data
+    await client.query(`
+      ALTER TABLE activities ADD COLUMN IF NOT EXISTS event_type VARCHAR(255);
+      ALTER TABLE activities ADD COLUMN IF NOT EXISTS details TEXT;
+      ALTER TABLE activities ADD COLUMN IF NOT EXISTS start_time TIMESTAMPTZ;
+      ALTER TABLE activities ADD COLUMN IF NOT EXISTS end_time TIMESTAMPTZ;
+      ALTER TABLE activities ADD COLUMN IF NOT EXISTS duration_seconds INT;
+    `);
+
+    // 3. Seed default values safely
     await client.query(`
       INSERT INTO users (username, password, role)
       VALUES ('jadentam', 'Jaden0309', 'admin')
       ON CONFLICT (username) DO NOTHING;
     `);
 
-    // 5. Seed Default Habit Options
     const checkEvents = await client.query('SELECT COUNT(*) FROM events');
     if (parseInt(checkEvents.rows[0].count) === 0) {
       await client.query(`
@@ -60,7 +61,7 @@ export async function initDb() {
       `);
     }
 
-    console.log('✅ Database tables & admin account initialized successfully!');
+    console.log('✅ Database connected and verified safely!');
   } catch (err) {
     console.error('❌ Error initializing database:', err);
   } finally {
@@ -69,6 +70,3 @@ export async function initDb() {
 }
 
 export default pool;
-
-// DROP TABLE IF EXISTS activities, events, users CASCADE; 
-// this line is to drop database from neon
