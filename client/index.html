@@ -86,7 +86,7 @@
       transition: all 0.2s ease;
     }
 
-    .nav-item:hover {
+    .nav-item:hover:not(:disabled) {
       background-color: rgba(255, 255, 255, 0.03);
       color: var(--text-main);
     }
@@ -95,6 +95,15 @@
       background-color: var(--accent-primary);
       color: var(--text-main);
       box-shadow: 0 8px 20px -6px rgba(59, 130, 246, 0.5);
+    }
+
+    /* Locked state styling for navigation and inputs */
+    .nav-item:disabled,
+    input:disabled,
+    select:disabled {
+      opacity: 0.35 !important;
+      cursor: not-allowed !important;
+      box-shadow: none !important;
     }
 
     .sidebar-footer {
@@ -137,10 +146,9 @@
       font-weight: 800;
     }
 
-    /* --- STATS & CARDS LAYOUT --- */
     .stats-row {
       display: grid;
-      grid-template-columns: minmax(280px, 400px);
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 24px;
       margin-bottom: 30px;
     }
@@ -151,7 +159,6 @@
       padding: 24px;
       border: 1px solid rgba(255, 255, 255, 0.02);
       box-shadow: var(--shadow-premium);
-      text-align: center;
     }
 
     .stat-label {
@@ -184,7 +191,70 @@
       font-weight: 700;
     }
 
-    /* --- RESPONSIVE TABLE --- */
+    /* Header with stopwatch layout */
+    .session-header-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 25px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .session-header-container h2 {
+      margin: 0;
+    }
+
+    .stopwatch-badge {
+      background-color: var(--bg-input);
+      border: 1px solid var(--border-color);
+      padding: 6px 14px;
+      border-radius: var(--radius-md);
+      font-family: monospace;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent-primary);
+    }
+
+    /* Countdown Timer Page Styles */
+    .timer-display {
+      font-size: 4rem;
+      font-family: monospace;
+      font-weight: 800;
+      text-align: center;
+      margin: 20px 0 30px 0;
+      color: var(--text-main);
+      letter-spacing: 2px;
+    }
+
+    .preset-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .btn-preset {
+      padding: 10px;
+      background-color: var(--bg-input);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      color: var(--text-main);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-preset:hover {
+      border-color: var(--accent-primary);
+      background-color: rgba(59, 130, 246, 0.1);
+    }
+
+    .timer-controls {
+      display: flex;
+      gap: 12px;
+    }
+
     .table-container {
       width: 100%;
       overflow-x: auto;
@@ -217,7 +287,6 @@
       border-bottom: none;
     }
 
-    /* --- FORM CONTROLS --- */
     .form-unit {
       margin-bottom: 24px;
     }
@@ -263,6 +332,9 @@
     .btn-red { background-color: var(--accent-error); color: white; }
     .btn-red:hover { background-color: #b91c1c; }
 
+    .btn-blue { background-color: var(--accent-primary); color: white; }
+    .btn-blue:hover { background-color: var(--accent-hover); }
+
     .admin-grid {
       display: grid;
       grid-template-columns: 1.2fr 0.8fr;
@@ -280,7 +352,13 @@
 
     .hidden { display: none !important; }
 
-    /* --- RESPONSIVE MEDIA QUERIES --- */
+    @media print {
+      .sidebar, .btn-action, select, input { display: none !important; }
+      .main-content { padding: 0 !important; }
+      body { background: white; color: black; }
+      .widget-card, .stat-card { border: 1px solid #ccc; box-shadow: none; }
+    }
+
     @media (max-width: 900px) {
       .admin-grid {
         grid-template-columns: 1fr;
@@ -364,6 +442,8 @@
       <nav class="nav-group">
         <button class="nav-item active" id="menu-dash">Dashboard</button>
         <button class="nav-item" id="menu-start">Track Habits</button>
+        <button class="nav-item" id="menu-timer">⏱️ Countdown Timer</button>
+        <button class="nav-item" id="menu-parent">👨‍👩‍👧 Parent Portal</button>
         <button class="nav-item hidden" style="background-color: rgba(245, 158, 11, 0.08); color: #f59e0b;" id="menu-admin">🛡️ Admin Panel</button>
       </nav>
       <div class="sidebar-footer">
@@ -401,7 +481,10 @@
 
       <div id="panel-start" class="hidden">
         <div class="widget-card" style="max-width: 520px; padding: 35px;">
-          <h2 id="session-heading-text" style="margin-bottom: 25px;">Configure Session</h2>
+          <div class="session-header-container">
+            <h2 id="session-heading-text">Configure Session</h2>
+            <div id="stopwatch-display" class="stopwatch-badge hidden">⏱️ 00:00:00</div>
+          </div>
           <div class="form-unit">
             <label>Select Habit:</label>
             <select id="event-selector"></select>
@@ -411,6 +494,86 @@
             <input type="text" id="hw-details-field" placeholder="e.g., Run 5km, read 2 chapters">
           </div>
           <button class="btn-action btn-green" id="action-trigger-btn">Start Session</button>
+        </div>
+      </div>
+
+      <div id="panel-timer" class="hidden">
+        <div class="widget-card" style="max-width: 520px; padding: 35px; margin: 0 auto;">
+          <h2>⏳ Countdown Timer</h2>
+          
+          <div class="timer-display" id="cd-display">25:00</div>
+
+          <div style="margin-bottom: 20px;">
+            <label>Quick Presets</label>
+            <div class="preset-grid">
+              <button class="btn-preset" onclick="setPresetTime(5)">5m</button>
+              <button class="btn-preset" onclick="setPresetTime(10)">10m</button>
+              <button class="btn-preset" onclick="setPresetTime(15)">15m</button>
+              <button class="btn-preset" onclick="setPresetTime(25)">25m</button>
+              <button class="btn-preset" onclick="setPresetTime(30)">30m</button>
+              <button class="btn-preset" onclick="setPresetTime(60)">60m</button>
+            </div>
+          </div>
+
+          <div class="form-unit" style="display: flex; gap: 15px;">
+            <div style="flex: 1;">
+              <label>Minutes</label>
+              <input type="number" id="cd-minutes-input" min="0" max="999" value="25">
+            </div>
+            <div style="flex: 1;">
+              <label>Seconds</label>
+              <input type="number" id="cd-seconds-input" min="0" max="59" value="00">
+            </div>
+          </div>
+
+          <div class="timer-controls">
+            <button class="btn-action btn-green" id="cd-start-btn">Start</button>
+            <button class="btn-action btn-red" id="cd-reset-btn">Reset</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="panel-parent" class="hidden">
+        <div class="widget-card" style="margin-bottom: 30px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+            <div>
+              <h2 style="margin: 0;">📋 Weekly Child Progress Report</h2>
+              <p style="color: var(--text-muted); margin: 5px 0 0 0;" id="report-date-range">Report generated for the past 7 days</p>
+            </div>
+            <button class="btn-action btn-blue" style="width: auto; padding: 10px 20px;" onclick="window.print()">🖨️ Print / Save PDF</button>
+          </div>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-label">Weekly Active Days</div>
+            <div class="stat-value" id="report-active-days">0 / 7</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Time Focused</div>
+            <div class="stat-value" id="report-total-time">0m</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Sessions Completed</div>
+            <div class="stat-value" id="report-sessions-count">0</div>
+          </div>
+        </div>
+
+        <div class="widget-card">
+          <h2>📌 Weekly Activity Breakdown</h2>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Habit Name</th>
+                  <th>Sessions Completed</th>
+                  <th>Total Duration</th>
+                  <th>Last Completed</th>
+                </tr>
+              </thead>
+              <tbody id="report-breakdown-rows"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -443,15 +606,153 @@
     const API_BASE_URL = 'http://localhost:5000';
     let activeTrackingState = false, initialTimestamp = null, authMode = 'login';
     let currentUser = JSON.parse(localStorage.getItem('habit_tracker_user')) || null;
+    let timerInterval = null;
+
+    // Countdown Timer Variables & Alarm Sound
+    let cdInterval = null;
+    let cdRemainingSeconds = 25 * 60;
+    let cdIsRunning = false;
+    const alarmSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
 
     const viewAuth = document.getElementById('view-auth'), appWorkspace = document.getElementById('app-workspace');
-    const panelDashboard = document.getElementById('panel-dashboard'), panelStart = document.getElementById('panel-start'), panelAdmin = document.getElementById('panel-admin');
+    const panelDashboard = document.getElementById('panel-dashboard'), panelStart = document.getElementById('panel-start'), panelTimer = document.getElementById('panel-timer'), panelParent = document.getElementById('panel-parent'), panelAdmin = document.getElementById('panel-admin');
     
-    const menuDash = document.getElementById('menu-dash'), menuStart = document.getElementById('menu-start'), menuAdmin = document.getElementById('menu-admin');
+    const menuDash = document.getElementById('menu-dash'), menuStart = document.getElementById('menu-start'), menuTimer = document.getElementById('menu-timer'), menuParent = document.getElementById('menu-parent'), menuAdmin = document.getElementById('menu-admin');
+    const logoutBtn = document.getElementById('logout-btn');
     const eventSelector = document.getElementById('event-selector'), hwDetailsField = document.getElementById('hw-details-field');
     const actionTriggerBtn = document.getElementById('action-trigger-btn'), sessionHeadingText = document.getElementById('session-heading-text');
+    const stopwatchDisplay = document.getElementById('stopwatch-display');
+
+    // Stopwatch helper
+    function startStopwatch() {
+      const startTime = Date.now();
+      stopwatchDisplay.classList.remove('hidden');
+      stopwatchDisplay.textContent = '⏱️ 00:00:00';
+      
+      timerInterval = setInterval(() => {
+        const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+        const hrs = String(Math.floor(elapsedSeconds / 3600)).padStart(2, '0');
+        const mins = String(Math.floor((elapsedSeconds % 3600) / 60)).padStart(2, '0');
+        const secs = String(elapsedSeconds % 60).padStart(2, '0');
+        stopwatchDisplay.textContent = `⏱️ ${hrs}:${mins}:${secs}`;
+      }, 1000);
+    }
+
+    function stopStopwatch() {
+      clearInterval(timerInterval);
+      stopwatchDisplay.classList.add('hidden');
+    }
+
+    // --- COUNTDOWN TIMER FUNCTIONS ---
+    function updateCdDisplay() {
+      const mins = Math.floor(cdRemainingSeconds / 60);
+      const secs = cdRemainingSeconds % 60;
+      document.getElementById('cd-display').textContent = 
+        `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function setPresetTime(minutes) {
+      if (cdIsRunning) pauseCountdown();
+      document.getElementById('cd-minutes-input').value = minutes;
+      document.getElementById('cd-seconds-input').value = 0;
+      cdRemainingSeconds = minutes * 60;
+      updateCdDisplay();
+    }
+
+    function playAlarm() {
+      alarmSound.currentTime = 0;
+      alarmSound.play().catch(e => console.log('Audio playback prevented:', e));
+    }
+
+    function startCountdown() {
+      if (cdIsRunning) return;
+      
+      const minsInput = parseInt(document.getElementById('cd-minutes-input').value) || 0;
+      const secsInput = parseInt(document.getElementById('cd-seconds-input').value) || 0;
+      
+      if (!cdRemainingSeconds || (cdRemainingSeconds !== (minsInput * 60 + secsInput) && !cdIsRunning)) {
+        cdRemainingSeconds = (minsInput * 60) + secsInput;
+      }
+
+      if (cdRemainingSeconds <= 0) return;
+
+      cdIsRunning = true;
+      document.getElementById('cd-start-btn').textContent = 'Pause';
+      document.getElementById('cd-start-btn').className = 'btn-action btn-blue';
+      document.getElementById('cd-minutes-input').disabled = true;
+      document.getElementById('cd-seconds-input').disabled = true;
+
+      cdInterval = setInterval(() => {
+        cdRemainingSeconds--;
+        updateCdDisplay();
+
+        if (cdRemainingSeconds <= 0) {
+          clearInterval(cdInterval);
+          cdIsRunning = false;
+          playAlarm();
+          alert('⏰ Countdown Timer Finished!');
+          resetCountdown();
+        }
+      }, 1000);
+    }
+
+    function pauseCountdown() {
+      clearInterval(cdInterval);
+      cdIsRunning = false;
+      document.getElementById('cd-start-btn').textContent = 'Resume';
+      document.getElementById('cd-start-btn').className = 'btn-action btn-green';
+    }
+
+    function resetCountdown() {
+      clearInterval(cdInterval);
+      cdIsRunning = false;
+      const minsInput = parseInt(document.getElementById('cd-minutes-input').value) || 0;
+      const secsInput = parseInt(document.getElementById('cd-seconds-input').value) || 0;
+      cdRemainingSeconds = (minsInput * 60) + secsInput;
+      
+      document.getElementById('cd-start-btn').textContent = 'Start';
+      document.getElementById('cd-start-btn').className = 'btn-action btn-green';
+      document.getElementById('cd-minutes-input').disabled = false;
+      document.getElementById('cd-seconds-input').disabled = false;
+      updateCdDisplay();
+    }
+
+    document.getElementById('cd-start-btn').addEventListener('click', () => {
+      if (cdIsRunning) pauseCountdown();
+      else startCountdown();
+    });
+
+    document.getElementById('cd-reset-btn').addEventListener('click', resetCountdown);
+
+    document.getElementById('cd-minutes-input').addEventListener('change', resetCountdown);
+    document.getElementById('cd-seconds-input').addEventListener('change', resetCountdown);
+
+    // Toggle system lock state during sessions
+    function setSystemLockState(isLocked) {
+      activeTrackingState = isLocked;
+
+      // Disable inputs, navigation, and logout
+      menuDash.disabled = isLocked;
+      menuTimer.disabled = isLocked;
+      menuParent.disabled = isLocked;
+      menuAdmin.disabled = isLocked;
+      logoutBtn.disabled = isLocked;
+      eventSelector.disabled = isLocked;
+      hwDetailsField.disabled = isLocked;
+    }
+
+    // Intercept window/tab closure when session is active
+    window.addEventListener('beforeunload', (e) => {
+      if (activeTrackingState) {
+        e.preventDefault();
+        e.returnValue = 'A tracking session is currently active. Are you sure you want to exit?';
+        return e.returnValue;
+      }
+    });
 
     function routeView(targetView) {
+      if (activeTrackingState) return;
+
       if (!currentUser) {
         viewAuth.classList.remove('hidden');
         appWorkspace.classList.add('hidden');
@@ -460,8 +761,8 @@
       viewAuth.classList.add('hidden');
       appWorkspace.classList.remove('hidden');
 
-      [menuDash, menuStart, menuAdmin].forEach(b => b.classList.remove('active'));
-      [panelDashboard, panelStart, panelAdmin].forEach(p => p.classList.add('hidden'));
+      [menuDash, menuStart, menuTimer, menuParent, menuAdmin].forEach(b => b.classList.remove('active'));
+      [panelDashboard, panelStart, panelTimer, panelParent, panelAdmin].forEach(p => p.classList.add('hidden'));
 
       if (currentUser.role === 'admin') menuAdmin.classList.remove('hidden');
       else menuAdmin.classList.add('hidden');
@@ -481,6 +782,17 @@
         document.getElementById('current-view-title').textContent = "Track Habits";
         populateEventsDropdown();
       }
+      if (targetView === 'timer') {
+        menuTimer.classList.add('active');
+        panelTimer.classList.remove('hidden');
+        document.getElementById('current-view-title').textContent = "Countdown Timer";
+      }
+      if (targetView === 'parent') {
+        menuParent.classList.add('active');
+        panelParent.classList.remove('hidden');
+        document.getElementById('current-view-title').textContent = "Parent Portal";
+        generateWeeklyReport();
+      }
       if (targetView === 'admin') {
         menuAdmin.classList.add('active');
         panelAdmin.classList.remove('hidden');
@@ -491,6 +803,8 @@
 
     menuDash.addEventListener('click', () => { if(!activeTrackingState) routeView('dashboard'); });
     menuStart.addEventListener('click', () => routeView('start'));
+    menuTimer.addEventListener('click', () => { if(!activeTrackingState) routeView('timer'); });
+    menuParent.addEventListener('click', () => { if(!activeTrackingState) routeView('parent'); });
     menuAdmin.addEventListener('click', () => { if(!activeTrackingState) routeView('admin'); });
 
     document.getElementById('auth-toggle').addEventListener('click', () => {
@@ -513,8 +827,11 @@
       } catch (e) { alert('Server unavailable.'); }
     });
 
-    document.getElementById('logout-btn').addEventListener('click', () => {
-      localStorage.removeItem('habit_tracker_user'); currentUser = null; routeView('auth');
+    logoutBtn.addEventListener('click', () => {
+      if (activeTrackingState) return;
+      localStorage.removeItem('habit_tracker_user'); 
+      currentUser = null; 
+      routeView('auth');
     });
 
     async function populateEventsDropdown() {
@@ -531,11 +848,13 @@
       const targetEvent = eventSelector.value;
       
       if (!activeTrackingState) {
-        activeTrackingState = true; 
+        // LOCK THE SYSTEM & START STOPWATCH
+        setSystemLockState(true);
+        startStopwatch();
+
         initialTimestamp = new Date().toISOString();
         actionTriggerBtn.textContent = 'End Session'; 
         actionTriggerBtn.className = 'btn-action btn-red';
-        eventSelector.disabled = true; 
         sessionHeadingText.textContent = `🚀 Active: ${targetEvent}`;
       } else {
         const payload = { 
@@ -556,11 +875,13 @@
           const resultData = await response.json();
 
           if (response.ok) {
-            activeTrackingState = false; 
+            // UNLOCK SYSTEM & STOP STOPWATCH
+            stopStopwatch();
+            setSystemLockState(false);
+
             hwDetailsField.value = '';
             actionTriggerBtn.textContent = 'Start Session'; 
             actionTriggerBtn.className = 'btn-action btn-green';
-            eventSelector.disabled = false; 
             sessionHeadingText.textContent = 'Configure Session';
             routeView('dashboard');
           } else {
@@ -583,6 +904,65 @@
       
       data.forEach(r => {
         target.innerHTML += `<tr><td><strong>${r.event_type}</strong></td><td>${r.details || '-'}</td><td>${new Date(r.start_time).toLocaleString()}</td><td>${Math.floor(r.duration_seconds/60)}m ${r.duration_seconds%60}s</td></tr>`;
+      });
+    }
+
+    // GENERATE PARENT PORTAL WEEKLY REPORT
+    async function generateWeeklyReport() {
+      const tbody = document.getElementById('report-breakdown-rows');
+      tbody.innerHTML = '<tr><td colspan="4">Generating report...</td></tr>';
+
+      const res = await fetch(`${API_BASE_URL}/api/activities?userId=${currentUser.userId}`);
+      const activities = await res.json();
+
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+      
+      document.getElementById('report-date-range').textContent = 
+        `Weekly Report: ${sevenDaysAgo.toLocaleDateString()} – ${now.toLocaleDateString()}`;
+
+      // Filter activities in the last 7 days
+      const weeklyActivities = activities.filter(a => new Date(a.start_time) >= sevenDaysAgo);
+
+      // Active days count
+      const activeDaysSet = new Set(weeklyActivities.map(a => new Date(a.start_time).toDateString()));
+      document.getElementById('report-active-days').textContent = `${activeDaysSet.size} / 7`;
+
+      // Total duration
+      const totalSecs = weeklyActivities.reduce((sum, a) => sum + (a.duration_seconds || 0), 0);
+      const totalHrs = Math.floor(totalSecs / 3600);
+      const totalMins = Math.floor((totalSecs % 3600) / 60);
+      document.getElementById('report-total-time').textContent = totalHrs > 0 ? `${totalHrs}h ${totalMins}m` : `${totalMins}m`;
+
+      // Total sessions
+      document.getElementById('report-sessions-count').textContent = weeklyActivities.length;
+
+      // Habit breakdown aggregation
+      const habitStats = {};
+      weeklyActivities.forEach(a => {
+        if (!habitStats[a.event_type]) {
+          habitStats[a.event_type] = { count: 0, totalDuration: 0, lastTime: a.start_time };
+        }
+        habitStats[a.event_type].count++;
+        habitStats[a.event_type].totalDuration += (a.duration_seconds || 0);
+        if (new Date(a.start_time) > new Date(habitStats[a.event_type].lastTime)) {
+          habitStats[a.event_type].lastTime = a.start_time;
+        }
+      });
+
+      tbody.innerHTML = Object.keys(habitStats).length ? '' : '<tr><td colspan="4" style="color:var(--text-muted);">No habits recorded in the last 7 days.</td></tr>';
+
+      Object.entries(habitStats).forEach(([habitName, stats]) => {
+        const mins = Math.floor(stats.totalDuration / 60);
+        const secs = stats.totalDuration % 60;
+        tbody.innerHTML += `
+          <tr>
+            <td><strong>${habitName}</strong></td>
+            <td>${stats.count} session(s)</td>
+            <td>${mins}m ${secs}s</td>
+            <td>${new Date(stats.lastTime).toLocaleString()}</td>
+          </tr>
+        `;
       });
     }
 
