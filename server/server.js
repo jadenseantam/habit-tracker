@@ -117,22 +117,32 @@ app.get('/api/admin/users', async (req, res) => {
 });
 
 // Add New Habit Option (FIXED: Supports eventName from frontend and matches db schema)
+// Add New Habit Option (Admin Route)
 app.post('/api/admin/events', async (req, res) => {
-  const eventName = req.body.eventName || req.body.name;
-  
-  if (!eventName) {
-    return res.status(400).json({ message: 'Habit name is required' });
+  // Read whatever key the iOS app sends: 'eventName' or 'name' or 'habitName'
+  const eventName = req.body.eventName || req.body.name || req.body.habitName;
+
+  if (!eventName || typeof eventName !== 'string' || !eventName.trim()) {
+    return res.status(400).json({ message: 'Habit name is required.' });
   }
 
   try {
+    // Insert into Postgres (events table has 'id' and 'name')
     const result = await pool.query(
-      'INSERT INTO events (name) VALUES ($1) ON CONFLICT DO NOTHING RETURNING *',
-      [eventName]
+      'INSERT INTO events (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING *',
+      [eventName.trim()]
     );
-    res.status(201).json(result.rows[0] || { message: 'Habit already exists' });
+
+    // If it already existed in DB, return success so the app doesn't throw an error
+    if (result.rows.length === 0) {
+      return res.status(200).json({ message: 'Habit already exists!' });
+    }
+
+    // Return the newly inserted habit object
+    return res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error('❌ Failed to inject habit:', err);
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 });
 
