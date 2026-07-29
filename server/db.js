@@ -2,10 +2,11 @@ import 'dotenv/config';
 import pg from 'pg';
 const { Pool } = pg;
 
+// Connection pool configured for Neon SSL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false,
+    rejectUnauthorized: false, // Required for Neon PostgreSQL
   },
 });
 
@@ -22,7 +23,7 @@ export async function initDb() {
       );
     `);
 
-    // 2. Events Table
+    // 2. Events/Habits Table
     await client.query(`
       CREATE TABLE IF NOT EXISTS events (
         id SERIAL PRIMARY KEY,
@@ -43,7 +44,7 @@ export async function initDb() {
       );
     `);
 
-    // 4. Seed Default Admin Account
+    // 4. Seed Admin Account (jadentam / Jaden0309)
     await client.query(`
       INSERT INTO users (username, password, role)
       VALUES ('jadentam', 'Jaden0309', 'admin')
@@ -59,7 +60,7 @@ export async function initDb() {
       `);
     }
 
-    console.log('✅ Database initialized');
+    console.log('✅ Database tables & admin account initialized successfully!');
   } catch (err) {
     console.error('❌ Error initializing database:', err);
   } finally {

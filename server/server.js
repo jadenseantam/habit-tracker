@@ -1,15 +1,20 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import pool, { initDb } from './db.js';
 
 const app = express();
+
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Initialize DB schema on server start
+// Initialize DB tables automatically
 initDb().catch(console.error);
 
-// --- AUTH ROUTES ---
+// ------------------- AUTH ROUTES -------------------
+
+// Register User
 app.post('/api/auth/register', async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -20,10 +25,11 @@ app.post('/api/auth/register', async (req, res) => {
     const user = result.rows[0];
     res.json({ userId: user.id, username: user.username, role: user.role });
   } catch (err) {
-    res.status(400).json({ message: 'Username already taken or invalid data.' });
+    res.status(400).json({ message: 'Username already taken or invalid input.' });
   }
 });
 
+// Login User
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -43,7 +49,9 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// --- HABIT OPTIONS ---
+// ------------------- HABIT / EVENT ROUTES -------------------
+
+// Get Habit List
 app.get('/api/events', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM events ORDER BY id ASC');
@@ -53,7 +61,9 @@ app.get('/api/events', async (req, res) => {
   }
 });
 
-// --- ACTIVITIES ---
+// ------------------- ACTIVITY LOG ROUTES -------------------
+
+// Save Activity Session
 app.post('/api/activities/save', async (req, res) => {
   const { userId, eventType, details, startTime, endTime } = req.body;
   const start = new Date(startTime);
@@ -68,10 +78,12 @@ app.post('/api/activities/save', async (req, res) => {
     );
     res.json({ success: true, message: 'Session logged successfully.' });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: 'Error saving session.' });
   }
 });
 
+// Get User Activities
 app.get('/api/activities', async (req, res) => {
   const { userId } = req.query;
   try {
@@ -81,11 +93,13 @@ app.get('/api/activities', async (req, res) => {
     );
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ message: 'Error fetching activity logs.' });
+    res.status(500).json({ message: 'Error fetching activities.' });
   }
 });
 
-// --- ADMIN ROUTES ---
+// ------------------- ADMIN ROUTES -------------------
+
+// Get All Users
 app.get('/api/admin/users', async (req, res) => {
   try {
     const result = await pool.query('SELECT id, username, role FROM users ORDER BY id ASC');
@@ -95,15 +109,24 @@ app.get('/api/admin/users', async (req, res) => {
   }
 });
 
+// Add New Habit Option
 app.post('/api/admin/events', async (req, res) => {
   const { eventName } = req.body;
   try {
     await pool.query('INSERT INTO events (name) VALUES ($1)', [eventName]);
     res.json({ success: true });
   } catch (err) {
-    res.status(400).json({ message: 'Event option already exists.' });
+    res.status(400).json({ message: 'Habit option already exists.' });
   }
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+// Export default app for Vercel Serverless
+export default app;
+
+// Listen locally when running 'node server.js'
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`🚀 Server listening at http://localhost:${PORT}`);
+  });
+}
