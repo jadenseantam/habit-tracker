@@ -78,33 +78,28 @@ app.post('/api/activities/save', async (req, res) => {
     );
     res.json({ success: true, message: 'Session logged successfully.' });
   } catch (err) {
-    console.error(err);
+    console.error('❌ Error saving session:', err);
     res.status(500).json({ message: 'Error saving session.' });
   }
 });
 
-// Get User Activities
-app.post('/api/activities', async (req, res) => {
-  // Support both camelCase and snake_case from frontend
-  const userId = req.body.userId || req.body.user_id;
-  const eventId = req.body.eventId || req.body.event_id;
+// GET User Activities (FIXED: Added missing GET route so Dashboard & Parent Portal load)
+app.get('/api/activities', async (req, res) => {
+  const { userId } = req.query;
 
-  if (!userId || !eventId) {
-    return res.status(400).json({ 
-      message: 'Missing userId or eventId', 
-      received: req.body 
-    });
+  if (!userId) {
+    return res.status(400).json({ message: 'Missing userId parameter' });
   }
 
   try {
     const result = await pool.query(
-      'INSERT INTO activities (user_id, event_id) VALUES ($1, $2) RETURNING *',
-      [userId, eventId]
+      'SELECT * FROM activities WHERE user_id = $1 ORDER BY start_time DESC',
+      [userId]
     );
-    return res.status(201).json(result.rows[0]);
+    res.json(result.rows);
   } catch (err) {
-    console.error('❌ Error saving session:', err);
-    return res.status(500).json({ message: 'Error saving session', error: err.message });
+    console.error('❌ Error fetching activities:', err);
+    res.status(500).json({ message: 'Error fetching activity logs' });
   }
 });
 
@@ -120,20 +115,20 @@ app.get('/api/admin/users', async (req, res) => {
   }
 });
 
-// Add New Habit Option
+// Add New Habit Option (FIXED: Supports eventName from frontend and matches db schema)
 app.post('/api/admin/events', async (req, res) => {
-  const { name, category } = req.body;
+  const eventName = req.body.eventName || req.body.name;
   
-  if (!name || !category) {
-    return res.status(400).json({ message: 'Name and category are required' });
+  if (!eventName) {
+    return res.status(400).json({ message: 'Habit name is required' });
   }
 
   try {
     const result = await pool.query(
-      'INSERT INTO events (name, category) VALUES ($1, $2) RETURNING *',
-      [name, category]
+      'INSERT INTO events (name) VALUES ($1) ON CONFLICT DO NOTHING RETURNING *',
+      [eventName]
     );
-    res.status(201).json(result.rows[0]);
+    res.status(201).json(result.rows[0] || { message: 'Habit already exists' });
   } catch (err) {
     console.error('❌ Failed to inject habit:', err);
     res.status(500).json({ message: err.message });
