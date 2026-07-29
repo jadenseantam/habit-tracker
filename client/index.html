@@ -748,29 +748,44 @@
 
   // ------------------- DROPDOWN POPULATION -------------------
 
-  async function populateHabitDropdown() {
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/events`);
-      if (!res.ok) return;
-      const habits = await res.json();
+async function populateHabitDropdown() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/events`);
+    let habits = [];
 
-      // Targets all habit dropdown elements in index.html
-      const habitSelects = document.querySelectorAll('#event-type-select, select');
+    if (res.ok) {
+      habits = await res.json();
+    }
 
-      habitSelects.forEach(select => {
-        if (!select || select.id === 'auth-username') return;
-        select.innerHTML = '<option value="" disabled selected>Select a habit...</option>';
-        habits.forEach(h => {
+    // Target all dropdowns across the app
+    const habitSelects = document.querySelectorAll('#event-type-select, select');
+
+    habitSelects.forEach(select => {
+      if (!select || select.id === 'auth-username') return;
+
+      select.innerHTML = ''; // Clear existing options
+
+      // Default option: Homework
+      const defaultOpt = document.createElement('option');
+      defaultOpt.value = 'Homework';
+      defaultOpt.textContent = 'Homework';
+      defaultOpt.selected = true; // Sets Homework as the pre-selected initial value
+      select.appendChild(defaultOpt);
+
+      // Append any additional habits fetched from the database (excluding duplicate Homework)
+      habits.forEach(h => {
+        if (h.name.toLowerCase() !== 'homework') {
           const opt = document.createElement('option');
           opt.value = h.name;
           opt.textContent = h.name;
           select.appendChild(opt);
-        });
+        }
       });
-    } catch (err) {
-      console.error('Error fetching habits:', err);
-    }
+    });
+  } catch (err) {
+    console.error('Error fetching habits:', err);
   }
+}
 
   // ------------------- TIMER LOGIC -------------------
 
