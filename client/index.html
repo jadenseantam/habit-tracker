@@ -627,7 +627,7 @@
       document.getElementById('auth-modal').style.display = 'none';
       document.getElementById('user-display-name').textContent = currentUser.username;
       
-      // Show admin tab if user has admin role
+      // Show admin tab if user is admin
       if (currentUser.role === 'admin') {
         const adminTab = document.querySelector('[data-tab="tab-admin"]');
         if (adminTab) adminTab.style.display = 'flex';
@@ -643,7 +643,7 @@
   }
 
   function setupNavigation() {
-    // Tab switching logic
+    // Sidebar Tab Switching
     document.querySelectorAll('.sidebar-nav button').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const targetTab = e.currentTarget.getAttribute('data-tab');
@@ -656,23 +656,23 @@
         const tabEl = document.getElementById(targetTab);
         if (tabEl) tabEl.classList.add('active');
 
-        // Refresh data when tabs are opened
+        // Reload data on tab change
         if (targetTab === 'tab-dashboard') loadDashboard();
         if (targetTab === 'tab-admin' && currentUser?.role === 'admin') populateAdminDashboard();
       });
     });
 
-    // Logout button
+    // Logout
     document.getElementById('logout-btn')?.addEventListener('click', () => {
       localStorage.removeItem('habit_tracker_user');
       location.reload();
     });
   }
 
-  // ------------------- AUTHENTICATION -------------------
+  // ------------------- AUTHENTICATION & HABIT INJECTION -------------------
 
   function setupForms() {
-    // Auth Mode Toggle
+    // Auth Toggle
     const authToggleBtn = document.getElementById('auth-toggle-btn');
     const authTitle = document.getElementById('auth-title');
     const authSubmitBtn = document.getElementById('auth-submit-btn');
@@ -685,7 +685,7 @@
       authToggleBtn.textContent = isLogin ? 'Need an account? Register' : 'Already have an account? Login';
     });
 
-    // Auth Form Submit
+    // Auth Submit
     document.getElementById('auth-form')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const usernameInput = document.getElementById('auth-username').value.trim();
@@ -713,10 +713,10 @@
       }
     });
 
-    // Inject Habit Listener
-    document.getElementById('add-event-submit-btn')?.addEventListener('click', async () => {
-      const input = document.getElementById('new-event-name-input');
-      const habitName = input.value.trim();
+    // 🎯 INJECT HABIT BUTTON (FIXED ID: inject-event-btn)
+    document.getElementById('inject-event-btn')?.addEventListener('click', async () => {
+      const input = document.getElementById('custom-event-name'); // FIXED ID
+      const habitName = input ? input.value.trim() : '';
 
       if (!habitName) {
         alert('Please enter a habit name.');
@@ -733,20 +733,20 @@
         const data = await res.json();
 
         if (res.ok) {
-          alert(`Success: ${data.message || 'Habit added!'}`);
-          input.value = '';
-          await populateHabitDropdown(); // Updates ALL habit selectors app-wide instantly
+          alert(`Success: ${data.message || 'Habit injected!'}`);
+          if (input) input.value = '';
+          await populateHabitDropdown(); // Refreshes dropdowns across all tabs
         } else {
-          alert(`Error: ${data.message || 'Could not add habit.'}`);
+          alert(`Error: ${data.message || 'Could not inject habit.'}`);
         }
       } catch (err) {
         console.error('Error injecting habit:', err);
-        alert('Failed to connect to the server.');
+        alert('Failed to connect to server.');
       }
     });
   }
 
-  // ------------------- HABIT DROPDOWN SYNC -------------------
+  // ------------------- DROPDOWN POPULATION -------------------
 
   async function populateHabitDropdown() {
     try {
@@ -754,11 +754,11 @@
       if (!res.ok) return;
       const habits = await res.json();
 
-      // Updates selectors on both Track Habits tab and Habit Settings tab
-      const habitSelects = document.querySelectorAll('#habit-select, #event-type-select, .habit-dropdown');
+      // Targets all habit dropdown elements in index.html
+      const habitSelects = document.querySelectorAll('#event-type-select, select');
 
       habitSelects.forEach(select => {
-        if (!select) return;
+        if (!select || select.id === 'auth-username') return;
         select.innerHTML = '<option value="" disabled selected>Select a habit...</option>';
         habits.forEach(h => {
           const opt = document.createElement('option');
@@ -768,14 +768,15 @@
         });
       });
     } catch (err) {
-      console.error('Error fetching habit dropdown:', err);
+      console.error('Error fetching habits:', err);
     }
   }
 
-  // ------------------- TIMER & TRACKING -------------------
+  // ------------------- TIMER LOGIC -------------------
 
-  document.getElementById('start-timer-btn')?.addEventListener('click', () => {
-    const habitSelect = document.getElementById('habit-select');
+  // 🎯 START TIMER (FIXED ID: start-btn)
+  document.getElementById('start-btn')?.addEventListener('click', () => {
+    const habitSelect = document.getElementById('event-type-select'); // FIXED ID
     targetEvent = habitSelect ? habitSelect.value : '';
 
     if (!targetEvent) {
@@ -787,8 +788,8 @@
     timerSeconds = 0;
     
     document.getElementById('timer-display').textContent = '00:00:00';
-    document.getElementById('start-timer-btn').disabled = true;
-    document.getElementById('stop-timer-btn').disabled = false;
+    document.getElementById('start-btn').disabled = true;
+    document.getElementById('stop-btn').disabled = false;
 
     activeTimer = setInterval(() => {
       timerSeconds++;
@@ -799,13 +800,14 @@
     }, 1000);
   });
 
-  document.getElementById('stop-timer-btn')?.addEventListener('click', async () => {
+  // 🎯 STOP TIMER (FIXED ID: stop-btn)
+  document.getElementById('stop-btn')?.addEventListener('click', async () => {
     clearInterval(activeTimer);
-    document.getElementById('start-timer-btn').disabled = false;
-    document.getElementById('stop-timer-btn').disabled = true;
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('stop-btn').disabled = true;
 
     const endTime = new Date().toISOString();
-    const detailsInput = document.getElementById('session-details-input');
+    const detailsInput = document.getElementById('hw-details'); // FIXED ID
     const details = detailsInput ? detailsInput.value.trim() : '';
 
     const payload = {
@@ -837,7 +839,7 @@
     }
   });
 
-  // ------------------- DASHBOARD & DATA FETCH -------------------
+  // ------------------- DASHBOARD & ADMIN TABLES -------------------
 
   async function loadDashboard() {
     if (!currentUser) return;
