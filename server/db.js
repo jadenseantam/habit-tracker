@@ -53,13 +53,13 @@ export async function initDb() {
       ON CONFLICT (username) DO NOTHING;
     `);
 
-    const checkEvents = await client.query('SELECT COUNT(*) FROM events');
-    if (parseInt(checkEvents.rows[0].count) === 0) {
-      await client.query(`
-        INSERT INTO events (name) VALUES ('Reading'), ('Homework'), ('Exercise')
-        ON CONFLICT DO NOTHING;
-      `);
-    }
+  const checkEvents = await client.query('SELECT COUNT(*) FROM events');
+  if (parseInt(checkEvents.rows[0].count) === 0) {
+    await client.query(`
+      INSERT INTO events (name) VALUES ('Homework')
+      ON CONFLICT DO NOTHING;
+    `);
+  }
 
     console.log('✅ Database connected and verified safely!');
   } catch (err) {
