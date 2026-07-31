@@ -352,6 +352,31 @@
 
     .hidden { display: none !important; }
 
+    .session-lock-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(8, 12, 20, 0.88);
+      backdrop-filter: blur(6px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: all;
+    }
+    .session-lock-message {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 1rem;
+      font-weight: 600;
+      max-width: 320px;
+      line-height: 1.5;
+    }
+    body.session-locked #session-widget {
+      position: relative;
+      z-index: 1001;
+    }
+
+
     @media print {
       .sidebar, .btn-action, select, input { display: none !important; }
       .main-content { padding: 0 !important; }
@@ -480,7 +505,7 @@
       </div>
 
       <div id="panel-start" class="hidden">
-        <div class="widget-card" style="max-width: 520px; padding: 35px;">
+        <div id="session-widget" class="widget-card" style="max-width: 520px; padding: 35px;">
           <div class="session-header-container">
             <h2 id="session-heading-text">Configure Session</h2>
             <div id="stopwatch-display" class="stopwatch-badge hidden">⏱️ 00:00:00</div>
@@ -565,7 +590,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>Habit Name</th>
+                  <th>Habit Type</th>
                   <th>Sessions Completed</th>
                   <th>Total Duration</th>
                   <th>Last Completed</th>
@@ -602,94 +627,151 @@
     </main>
   </div>
 
-<script>
-  // Backend Vercel URL
-  const API_BASE_URL = 'https://habit-tracker-sand-chi-51.vercel.app';
+  <div id="session-lock-overlay" class="session-lock-overlay hidden">
+    <p class="session-lock-message">Session in progress — stop and save to unlock the app.</p>
+  </div>
 
-  // Global State
+<script>
+  const API_BASE_URL = 'http://localhost:5000';
+
   let currentUser = JSON.parse(localStorage.getItem('habit_tracker_user')) || null;
   let activeTimer = null;
   let timerSeconds = 0;
   let initialTimestamp = null;
   let targetEvent = '';
+  let sessionActive = false;
+  let cdInterval = null;
+  let cdRemaining = 0;
 
-  // ------------------- INITIALIZATION & NAVIGATION -------------------
+  const NAV_MAP = {
+    'menu-dash': { panel: 'panel-dashboard', title: 'Dashboard' },
+    'menu-start': { panel: 'panel-start', title: 'Track Habits' },
+    'menu-timer': { panel: 'panel-timer', title: 'Countdown Timer' },
+    'menu-parent': { panel: 'panel-parent', title: 'Parent Portal' },
+    'menu-admin': { panel: 'panel-admin', title: 'Admin Panel' }
+  };
 
   document.addEventListener('DOMContentLoaded', () => {
     checkAuthState();
     setupNavigation();
     setupForms();
+    setupSessionTracking();
+    setupCountdownTimer();
     populateHabitDropdown();
   });
 
   function checkAuthState() {
+    const authView = document.getElementById('view-auth');
+    const workspace = document.getElementById('app-workspace');
+    const adminMenu = document.getElementById('menu-admin');
+
     if (currentUser) {
-      document.getElementById('auth-modal').style.display = 'none';
-      document.getElementById('user-display-name').textContent = currentUser.username;
-      
-      // Show admin tab if user is admin
+      authView?.classList.add('hidden');
+      workspace?.classList.remove('hidden');
+
+      const displayName = document.getElementById('user-display-name');
+      const avatar = document.getElementById('user-avatar');
+      if (displayName) displayName.textContent = currentUser.username;
+      if (avatar) avatar.textContent = currentUser.username.charAt(0).toUpperCase();
+
       if (currentUser.role === 'admin') {
-        const adminTab = document.querySelector('[data-tab="tab-admin"]');
-        if (adminTab) adminTab.style.display = 'flex';
+        adminMenu?.classList.remove('hidden');
+        populateAdminDashboard();
+      } else {
+        adminMenu?.classList.add('hidden');
       }
 
       loadDashboard();
-      if (currentUser.role === 'admin') {
-        populateAdminDashboard();
-      }
     } else {
-      document.getElementById('auth-modal').style.display = 'flex';
+      authView?.classList.remove('hidden');
+      workspace?.classList.add('hidden');
     }
   }
 
-  function setupNavigation() {
-    // Sidebar Tab Switching
-    document.querySelectorAll('.sidebar-nav button').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const targetTab = e.currentTarget.getAttribute('data-tab');
-        if (!targetTab) return;
+  function beforeUnloadHandler(e) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
 
-        document.querySelectorAll('.sidebar-nav button').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+  function setSessionLock(locked) {
+    document.body.classList.toggle('session-locked', locked);
+    document.getElementById('session-lock-overlay')?.classList.toggle('hidden', !locked);
 
-        e.currentTarget.classList.add('active');
-        const tabEl = document.getElementById(targetTab);
-        if (tabEl) tabEl.classList.add('active');
-
-        // Reload data on tab change
-        if (targetTab === 'tab-dashboard') loadDashboard();
-        if (targetTab === 'tab-admin' && currentUser?.role === 'admin') populateAdminDashboard();
-      });
+    document.querySelectorAll('.nav-group .nav-item, #logout-btn').forEach(el => {
+      el.disabled = locked;
     });
 
-    // Logout
+    const detailsInput = document.getElementById('hw-details-field');
+    const habitSelect = document.getElementById('event-selector');
+    if (detailsInput) detailsInput.disabled = locked;
+    if (habitSelect) habitSelect.disabled = locked;
+
+    if (locked) {
+      window.addEventListener('beforeunload', beforeUnloadHandler);
+      switchPanel('menu-start', true);
+    } else {
+      window.removeEventListener('beforeunload', beforeUnloadHandler);
+      if (habitSelect) habitSelect.disabled = false;
+    }
+  }
+
+  function switchPanel(menuId, force = false) {
+    if (sessionActive && !force) return;
+
+    const nav = NAV_MAP[menuId];
+    if (!nav) return;
+
+    document.querySelectorAll('.nav-group .nav-item').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(menuId)?.classList.add('active');
+
+    document.querySelectorAll('[id^="panel-"]').forEach(panel => panel.classList.add('hidden'));
+    document.getElementById(nav.panel)?.classList.remove('hidden');
+
+    const title = document.getElementById('current-view-title');
+    if (title) title.textContent = nav.title;
+
+    if (menuId === 'menu-dash') loadDashboard();
+    if (menuId === 'menu-parent') loadParentReport();
+    if (menuId === 'menu-admin' && currentUser?.role === 'admin') populateAdminDashboard();
+  }
+
+  function setupNavigation() {
+    Object.keys(NAV_MAP).forEach(menuId => {
+      document.getElementById(menuId)?.addEventListener('click', () => switchPanel(menuId));
+    });
+
     document.getElementById('logout-btn')?.addEventListener('click', () => {
+      if (sessionActive) {
+        alert('Please stop your active session before logging out.');
+        return;
+      }
       localStorage.removeItem('habit_tracker_user');
       location.reload();
     });
   }
 
-  // ------------------- AUTHENTICATION & HABIT INJECTION -------------------
-
   function setupForms() {
-    // Auth Toggle
-    const authToggleBtn = document.getElementById('auth-toggle-btn');
+    const authToggleBtn = document.getElementById('auth-toggle');
     const authTitle = document.getElementById('auth-title');
     const authSubmitBtn = document.getElementById('auth-submit-btn');
     let isLogin = true;
 
     authToggleBtn?.addEventListener('click', () => {
       isLogin = !isLogin;
-      authTitle.textContent = isLogin ? 'Welcome Back' : 'Create Account';
+      authTitle.textContent = isLogin ? 'Login' : 'Create Account';
       authSubmitBtn.textContent = isLogin ? 'Login' : 'Register';
-      authToggleBtn.textContent = isLogin ? 'Need an account? Register' : 'Already have an account? Login';
+      authToggleBtn.textContent = isLogin ? 'Create standard account' : 'Already have an account? Login';
     });
 
-    // Auth Submit
-    document.getElementById('auth-form')?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const usernameInput = document.getElementById('auth-username').value.trim();
-      const passwordInput = document.getElementById('auth-password').value.trim();
+    authSubmitBtn?.addEventListener('click', async () => {
+      const usernameInput = document.getElementById('auth-username')?.value.trim();
+      const passwordInput = document.getElementById('auth-password')?.value.trim();
+
+      if (!usernameInput || !passwordInput) {
+        alert('Please enter both username and password.');
+        return;
+      }
+
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
 
       try {
@@ -704,6 +786,7 @@
           currentUser = data;
           localStorage.setItem('habit_tracker_user', JSON.stringify(currentUser));
           checkAuthState();
+          switchPanel('menu-dash');
         } else {
           alert(`Auth Error: ${data.message}`);
         }
@@ -713,9 +796,8 @@
       }
     });
 
-    // 🎯 INJECT HABIT BUTTON (FIXED ID: inject-event-btn)
-    document.getElementById('inject-event-btn')?.addEventListener('click', async () => {
-      const input = document.getElementById('custom-event-name'); // FIXED ID
+    document.getElementById('add-event-submit-btn')?.addEventListener('click', async () => {
+      const input = document.getElementById('new-event-name-input');
       const habitName = input ? input.value.trim() : '';
 
       if (!habitName) {
@@ -735,7 +817,7 @@
         if (res.ok) {
           alert(`Success: ${data.message || 'Habit injected!'}`);
           if (input) input.value = '';
-          await populateHabitDropdown(); // Refreshes dropdowns across all tabs
+          await populateHabitDropdown();
         } else {
           alert(`Error: ${data.message || 'Could not inject habit.'}`);
         }
@@ -746,33 +828,22 @@
     });
   }
 
-  // ------------------- DROPDOWN POPULATION -------------------
+  async function populateHabitDropdown() {
+    const select = document.getElementById('event-selector');
+    if (!select) return;
 
-async function populateHabitDropdown() {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/events`);
-    let habits = [];
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/events`);
+      let habits = res.ok ? await res.json() : [];
 
-    if (res.ok) {
-      habits = await res.json();
-    }
+      select.innerHTML = '';
 
-    // Target all dropdowns across the app
-    const habitSelects = document.querySelectorAll('#event-type-select, select');
-
-    habitSelects.forEach(select => {
-      if (!select || select.id === 'auth-username') return;
-
-      select.innerHTML = ''; // Clear existing options
-
-      // Default option: Homework
       const defaultOpt = document.createElement('option');
       defaultOpt.value = 'Homework';
       defaultOpt.textContent = 'Homework';
-      defaultOpt.selected = true; // Sets Homework as the pre-selected initial value
+      defaultOpt.selected = true;
       select.appendChild(defaultOpt);
 
-      // Append any additional habits fetched from the database (excluding duplicate Homework)
       habits.forEach(h => {
         if (h.name.toLowerCase() !== 'homework') {
           const opt = document.createElement('option');
@@ -781,84 +852,158 @@ async function populateHabitDropdown() {
           select.appendChild(opt);
         }
       });
-    });
-  } catch (err) {
-    console.error('Error fetching habits:', err);
-  }
-}
-
-  // ------------------- TIMER LOGIC -------------------
-
-  // 🎯 START TIMER (FIXED ID: start-btn)
-  document.getElementById('start-btn')?.addEventListener('click', () => {
-    const habitSelect = document.getElementById('event-type-select'); // FIXED ID
-    targetEvent = habitSelect ? habitSelect.value : '';
-
-    if (!targetEvent) {
-      alert('Please select a habit first.');
-      return;
-    }
-
-    initialTimestamp = new Date().toISOString();
-    timerSeconds = 0;
-    
-    document.getElementById('timer-display').textContent = '00:00:00';
-    document.getElementById('start-btn').disabled = true;
-    document.getElementById('stop-btn').disabled = false;
-
-    activeTimer = setInterval(() => {
-      timerSeconds++;
-      const hrs = String(Math.floor(timerSeconds / 3600)).padStart(2, '0');
-      const mins = String(Math.floor((timerSeconds % 3600) / 60)).padStart(2, '0');
-      const secs = String(timerSeconds % 60).padStart(2, '0');
-      document.getElementById('timer-display').textContent = `${hrs}:${mins}:${secs}`;
-    }, 1000);
-  });
-
-  // 🎯 STOP TIMER (FIXED ID: stop-btn)
-  document.getElementById('stop-btn')?.addEventListener('click', async () => {
-    clearInterval(activeTimer);
-    document.getElementById('start-btn').disabled = false;
-    document.getElementById('stop-btn').disabled = true;
-
-    const endTime = new Date().toISOString();
-    const detailsInput = document.getElementById('hw-details'); // FIXED ID
-    const details = detailsInput ? detailsInput.value.trim() : '';
-
-    const payload = {
-      userId: currentUser.userId,
-      eventType: targetEvent,
-      details: details,
-      startTime: initialTimestamp,
-      endTime: endTime
-    };
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/activities/save`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        alert('Session saved successfully!');
-        if (detailsInput) detailsInput.value = '';
-        loadDashboard();
-      } else {
-        alert(`Error: ${data.message}`);
-      }
     } catch (err) {
-      console.error('Failed to save session:', err);
-      alert('Server communication error.');
+      console.error('Error fetching habits:', err);
     }
-  });
+  }
 
-  // ------------------- DASHBOARD & ADMIN TABLES -------------------
+  function formatStopwatch(totalSeconds) {
+    const hrs = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+    const mins = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+    const secs = String(totalSeconds % 60).padStart(2, '0');
+    return `${hrs}:${mins}:${secs}`;
+  }
+
+  function setupSessionTracking() {
+    const triggerBtn = document.getElementById('action-trigger-btn');
+    const stopwatch = document.getElementById('stopwatch-display');
+    const heading = document.getElementById('session-heading-text');
+    const habitSelect = document.getElementById('event-selector');
+    const detailsInput = document.getElementById('hw-details-field');
+
+    triggerBtn?.addEventListener('click', async () => {
+      if (!sessionActive) {
+        targetEvent = habitSelect?.value || '';
+        if (!targetEvent) {
+          alert('Please select a habit first.');
+          return;
+        }
+
+        sessionActive = true;
+        initialTimestamp = new Date().toISOString();
+        timerSeconds = 0;
+
+        heading.textContent = 'Active Session';
+        triggerBtn.textContent = 'Stop & Save Session';
+        triggerBtn.classList.remove('btn-green');
+        triggerBtn.classList.add('btn-red');
+        stopwatch?.classList.remove('hidden');
+        stopwatch.textContent = '⏱️ 00:00:00';
+        setSessionLock(true);
+
+        activeTimer = setInterval(() => {
+          timerSeconds++;
+          stopwatch.textContent = `⏱️ ${formatStopwatch(timerSeconds)}`;
+        }, 1000);
+      } else {
+        clearInterval(activeTimer);
+        sessionActive = false;
+        setSessionLock(false);
+
+        const endTime = new Date().toISOString();
+        const details = detailsInput?.value.trim() || '';
+
+        heading.textContent = 'Configure Session';
+        triggerBtn.textContent = 'Start Session';
+        triggerBtn.classList.remove('btn-red');
+        triggerBtn.classList.add('btn-green');
+        stopwatch?.classList.add('hidden');
+
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/activities/save`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: currentUser.userId,
+              eventType: targetEvent,
+              details,
+              startTime: initialTimestamp,
+              endTime
+            })
+          });
+
+          const data = await res.json();
+          if (res.ok) {
+            alert('Session saved successfully!');
+            if (detailsInput) detailsInput.value = '';
+            loadDashboard();
+          } else {
+            alert(`Error: ${data.message}`);
+          }
+        } catch (err) {
+          console.error('Failed to save session:', err);
+          alert('Server communication error.');
+        }
+      }
+    });
+  }
+
+  function updateCountdownDisplay() {
+    const display = document.getElementById('cd-display');
+    if (!display) return;
+    const mins = String(Math.floor(cdRemaining / 60)).padStart(2, '0');
+    const secs = String(cdRemaining % 60).padStart(2, '0');
+    display.textContent = `${mins}:${secs}`;
+  }
+
+  function setPresetTime(minutes) {
+    const minsInput = document.getElementById('cd-minutes-input');
+    const secsInput = document.getElementById('cd-seconds-input');
+    if (minsInput) minsInput.value = minutes;
+    if (secsInput) secsInput.value = 0;
+    cdRemaining = minutes * 60;
+    updateCountdownDisplay();
+  }
+  window.setPresetTime = setPresetTime;
+
+  function setupCountdownTimer() {
+    const startBtn = document.getElementById('cd-start-btn');
+    const resetBtn = document.getElementById('cd-reset-btn');
+    const minsInput = document.getElementById('cd-minutes-input');
+    const secsInput = document.getElementById('cd-seconds-input');
+
+    cdRemaining = (parseInt(minsInput?.value, 10) || 0) * 60 + (parseInt(secsInput?.value, 10) || 0);
+    updateCountdownDisplay();
+
+    startBtn?.addEventListener('click', () => {
+      if (cdInterval) {
+        clearInterval(cdInterval);
+        cdInterval = null;
+        startBtn.textContent = 'Start';
+        return;
+      }
+
+      if (cdRemaining <= 0) {
+        cdRemaining = (parseInt(minsInput?.value, 10) || 0) * 60 + (parseInt(secsInput?.value, 10) || 0);
+      }
+      if (cdRemaining <= 0) return;
+
+      startBtn.textContent = 'Pause';
+      cdInterval = setInterval(() => {
+        cdRemaining--;
+        updateCountdownDisplay();
+        if (cdRemaining <= 0) {
+          clearInterval(cdInterval);
+          cdInterval = null;
+          startBtn.textContent = 'Start';
+          alert('Timer finished!');
+        }
+      }, 1000);
+    });
+
+    resetBtn?.addEventListener('click', () => {
+      clearInterval(cdInterval);
+      cdInterval = null;
+      startBtn.textContent = 'Start';
+      cdRemaining = (parseInt(minsInput?.value, 10) || 0) * 60 + (parseInt(secsInput?.value, 10) || 0);
+      updateCountdownDisplay();
+    });
+  }
 
   async function loadDashboard() {
     if (!currentUser) return;
-    const tbody = document.getElementById('dashboard-tbody');
+    const tbody = document.getElementById('logs-insertion-point');
+    const scoreCount = document.getElementById('dashboard-score-count');
     if (!tbody) return;
 
     try {
@@ -866,6 +1011,7 @@ async function populateHabitDropdown() {
       if (!res.ok) throw new Error('Failed to load activities');
 
       const activities = await res.json();
+      if (scoreCount) scoreCount.textContent = activities.length;
       tbody.innerHTML = '';
 
       if (activities.length === 0) {
@@ -882,14 +1028,74 @@ async function populateHabitDropdown() {
           <tr>
             <td><strong>${act.event_type || 'General'}</strong></td>
             <td>${act.details || '-'}</td>
-            <td>${mins}m ${secs}s</td>
             <td>${dateStr}</td>
+            <td>${mins}m ${secs}s</td>
           </tr>
         `;
       });
     } catch (err) {
       console.error('Error loading dashboard:', err);
       tbody.innerHTML = '<tr><td colspan="4" style="color:#ef4444;">Error synchronizing data.</td></tr>';
+    }
+  }
+
+  async function loadParentReport() {
+    if (!currentUser) return;
+
+    const activeDaysEl = document.getElementById('report-active-days');
+    const totalTimeEl = document.getElementById('report-total-time');
+    const sessionsEl = document.getElementById('report-sessions-count');
+    const breakdownEl = document.getElementById('report-breakdown-rows');
+    if (!breakdownEl) return;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/activities?userId=${currentUser.userId}`);
+      if (!res.ok) throw new Error('Failed to load activities');
+
+      const activities = await res.json();
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+
+      const weekly = activities.filter(a => new Date(a.start_time) >= weekAgo);
+      const uniqueDays = new Set(weekly.map(a => new Date(a.start_time).toDateString()));
+      const totalSeconds = weekly.reduce((sum, a) => sum + (a.duration_seconds || 0), 0);
+      const totalMins = Math.floor(totalSeconds / 60);
+
+      if (activeDaysEl) activeDaysEl.textContent = `${uniqueDays.size} / 7`;
+      if (totalTimeEl) totalTimeEl.textContent = totalMins >= 60 ? `${Math.floor(totalMins / 60)}h ${totalMins % 60}m` : `${totalMins}m`;
+      if (sessionsEl) sessionsEl.textContent = weekly.length;
+
+      const byHabit = {};
+      weekly.forEach(a => {
+        const name = a.event_type || 'General';
+        if (!byHabit[name]) byHabit[name] = { count: 0, seconds: 0, last: a.start_time };
+        byHabit[name].count++;
+        byHabit[name].seconds += a.duration_seconds || 0;
+        if (new Date(a.start_time) > new Date(byHabit[name].last)) byHabit[name].last = a.start_time;
+      });
+
+      breakdownEl.innerHTML = '';
+      const habits = Object.entries(byHabit);
+      if (habits.length === 0) {
+        breakdownEl.innerHTML = '<tr><td colspan="4">No activity in the past 7 days.</td></tr>';
+        return;
+      }
+
+      habits.forEach(([name, stats]) => {
+        const mins = Math.floor(stats.seconds / 60);
+        const secs = stats.seconds % 60;
+        breakdownEl.innerHTML += `
+          <tr>
+            <td><strong>${name}</strong></td>
+            <td>${stats.count}</td>
+            <td>${mins}m ${secs}s</td>
+            <td>${new Date(stats.last).toLocaleString()}</td>
+          </tr>
+        `;
+      });
+    } catch (err) {
+      console.error('Error loading parent report:', err);
+      breakdownEl.innerHTML = '<tr><td colspan="4" style="color:#ef4444;">Error loading report.</td></tr>';
     }
   }
 
