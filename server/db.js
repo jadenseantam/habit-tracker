@@ -23,7 +23,8 @@ export async function initDb() {
 
       CREATE TABLE IF NOT EXISTS events (
         id SERIAL PRIMARY KEY,
-        name VARCHAR(255) UNIQUE NOT NULL
+        name VARCHAR(255) UNIQUE NOT NULL,
+        category VARCHAR(255) NOT NULL DEFAULT 'general'
       );
 
       CREATE TABLE IF NOT EXISTS activities (
@@ -46,6 +47,18 @@ export async function initDb() {
       ALTER TABLE activities ADD COLUMN IF NOT EXISTS duration_seconds INT;
     `);
 
+    // Ensure events.name is unique (older tables may lack this constraint)
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS events_name_unique_idx ON events (name);
+    `);
+
+    await client.query(`
+      ALTER TABLE events ADD COLUMN IF NOT EXISTS category VARCHAR(255) DEFAULT 'general';
+      UPDATE events SET category = 'general' WHERE category IS NULL;
+      ALTER TABLE events ALTER COLUMN category SET DEFAULT 'general';
+      ALTER TABLE events ALTER COLUMN category SET NOT NULL;
+    `);
+
     // 3. Seed default values safely
     await client.query(`
       INSERT INTO users (username, password, role)
@@ -55,10 +68,7 @@ export async function initDb() {
 
   const checkEvents = await client.query('SELECT COUNT(*) FROM events');
   if (parseInt(checkEvents.rows[0].count) === 0) {
-    await client.query(`
-      INSERT INTO events (name) VALUES ('Homework')
-      ON CONFLICT DO NOTHING;
-    `);
+    await client.query(`INSERT INTO events (name, category) VALUES ('Homework', 'general')`);
   }
 
     console.log('✅ Database connected and verified safely!');

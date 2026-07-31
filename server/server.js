@@ -116,14 +116,15 @@ app.post('/api/admin/events', async (req, res) => {
 
   try {
     const cleanName = eventName.trim();
-    const result = await pool.query(
-      'INSERT INTO events (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING *',
-      [cleanName]
-    );
-
-    if (result.rows.length === 0) {
+    const existing = await pool.query('SELECT id FROM events WHERE name = $1', [cleanName]);
+    if (existing.rows.length > 0) {
       return res.status(200).json({ message: 'Habit already exists!' });
     }
+
+    const result = await pool.query(
+      'INSERT INTO events (name, category) VALUES ($1, $2) RETURNING *',
+      [cleanName, 'general']
+    );
 
     res.status(201).json({ message: 'Habit added successfully!', event: result.rows[0] });
   } catch (err) {
