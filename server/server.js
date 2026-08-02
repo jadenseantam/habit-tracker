@@ -56,22 +56,135 @@ app.get('/api/events', async (req, res) => {
   }
 });
 
+app.get('/api/daily-plans', async (req, res) => {
+  const { userId, date } = req.query;
+
+  if (!userId || !date) {
+    return res.status(400).json({ message: 'Missing userId or date parameter.' });
+  }
+
+  try {
+    const result = await pool.query(
+      'SELECT habits, plan_date FROM daily_plans WHERE user_id = $1 AND plan_date = $2 LIMIT 1',
+      [userId, date]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({ habits: [], planDate: date });
+    }
+
+    const row = result.rows[0];
+    res.json({ habits: row.habits || [], planDate: date });
+  } catch (err) {
+    console.error('❌ Error fetching daily plan:', err);
+    res.status(500).json({ message: 'Error fetching daily plan.' });
+  }
+});
+
+app.post('/api/daily-plans', async (req, res) => {
+  const { userId, planDate, habits } = req.body;
+
+  if (!userId || !planDate || !Array.isArray(habits)) {
+    return res.status(400).json({ message: 'Missing userId, planDate, or habits array.' });
+  }
+
+  const cleanedHabits = habits
+    .map(habit => String(habit).trim())
+    .filter(Boolean);
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO daily_plans (user_id, plan_date, habits, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (user_id, plan_date)
+       DO UPDATE SET habits = EXCLUDED.habits, updated_at = NOW()
+       RETURNING habits, plan_date`,
+      [userId, planDate, JSON.stringify(cleanedHabits)]
+    );
+
+    res.json({
+      message: 'Daily habits saved successfully.',
+      habits: result.rows[0].habits || [],
+      planDate
+    });
+  } catch (err) {
+    console.error('❌ Error saving daily plan:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // ------------------- ACTIVITY LOG ROUTES -------------------
 
 app.post('/api/activities/save', async (req, res) => {
-  const { userId, eventType, details, startTime, endTime } = req.body;
+  const { userId, eventType, details, startTime, endTime, sessionToken, planDate } = req.body;
   const start = new Date(startTime);
   const end = new Date(endTime);
   const durationSeconds = Math.max(0, Math.floor((end - start) / 1000));
 
+  if (!userId || !eventType || !startTime || !endTime || !planDate) {
+    return res.status(400).json({ message: 'Missing required session data.' });
+  }
+
   try {
-    await pool.query(
-      `INSERT INTO activities (user_id, event_type, details, start_time, end_time, duration_seconds) 
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [userId, eventType, details || '', startTime, endTime, durationSeconds]
+    const planResult = await pool.query(
+      'SELECT habits FROM daily_plans WHERE user_id = $1 AND plan_date = $2 LIMIT 1',
+      [userId, planDate]
     );
-    res.json({ success: true, message: 'Session logged successfully.' });
+
+    const planHabits = Array.isArray(planResult.rows[0]?.habits) ? planResult.rows[0].habits : [];
+    const globalHabitResult = await pool.query(
+      'SELECT 1 FROM events WHERE name = $1 LIMIT 1',
+      [eventType]
+    );
+
+    const isInPlan = planHabits.includes(eventType);
+    const isGlobalHabit = globalHabitResult.rows.length > 0;
+
+    if (planHabits.length > 0 && !isInPlan && !isGlobalHabit) {
+      return res.status(400).json({ message: 'Habit is not part of today\'s plan.' });
+    }
+
+    if (sessionToken) {
+      const existing = await pool.query(
+        'SELECT * FROM activities WHERE session_token = $1 LIMIT 1',
+        [sessionToken]
+      );
+
+      if (existing.rows.length > 0) {
+        return res.json({
+          success: true,
+          duplicate: true,
+          message: 'Session already logged.',
+          activity: existing.rows[0]
+        });
+      }
+    }
+
+    const insertResult = await pool.query(
+      `INSERT INTO activities (user_id, event_type, details, start_time, end_time, duration_seconds, session_token)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [userId, eventType, details || '', startTime, endTime, durationSeconds, sessionToken || null]
+    );
+
+    res.json({ success: true, duplicate: false, message: 'Session logged successfully.', activity: insertResult.rows[0] });
   } catch (err) {
+    if (sessionToken && err.code === '23505') {
+      const existing = await pool.query(
+        'SELECT * FROM activities WHERE session_token = $1 LIMIT 1',
+        [sessionToken]
+      );
+
+      if (existing.rows.length > 0) {
+        return res.json({
+          success: true,
+          duplicate: true,
+          message: 'Session already logged.',
+          activity: existing.rows[0]
+        });
+      }
+    }
+
     console.error('❌ Database insert error:', err);
     res.status(500).json({ message: err.message });
   }
@@ -107,6 +220,15 @@ app.get('/api/admin/users', async (req, res) => {
   }
 });
 
+app.get('/api/admin/events', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, name, category FROM events ORDER BY id ASC');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching habits.' });
+  }
+});
+
 app.post('/api/admin/events', async (req, res) => {
   const { eventName } = req.body;
 
@@ -129,6 +251,28 @@ app.post('/api/admin/events', async (req, res) => {
     res.status(201).json({ message: 'Habit added successfully!', event: result.rows[0] });
   } catch (err) {
     console.error('❌ Failed to inject habit:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.delete('/api/admin/events/:id', async (req, res) => {
+  const eventId = Number.parseInt(req.params.id, 10);
+
+  if (!Number.isInteger(eventId)) {
+    return res.status(400).json({ message: 'Invalid habit id.' });
+  }
+
+  try {
+    const existing = await pool.query('SELECT id, name FROM events WHERE id = $1', [eventId]);
+
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ message: 'Habit not found.' });
+    }
+
+    await pool.query('DELETE FROM events WHERE id = $1', [eventId]);
+    res.json({ message: 'Habit deleted successfully.' });
+  } catch (err) {
+    console.error('❌ Failed to delete habit:', err);
     res.status(500).json({ message: err.message });
   }
 });

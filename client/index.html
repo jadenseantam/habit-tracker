@@ -59,6 +59,7 @@
       padding-left: 10px;
       letter-spacing: 0.5px;
       background: linear-gradient(to right, #3b82f6, #60a5fa);
+      background-clip: text;
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
@@ -173,6 +174,78 @@
     .stat-value {
       font-size: 2.2rem;
       font-weight: 800;
+    }
+
+    .progress-card {
+      background-color: var(--bg-card);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.02);
+      box-shadow: var(--shadow-premium);
+      margin-bottom: 24px;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .progress-shell {
+      width: 100%;
+      height: 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--accent-primary), #60a5fa);
+      transition: width 0.25s ease;
+    }
+
+    .progress-meta {
+      color: var(--text-muted);
+      font-size: 0.92rem;
+      margin: 0;
+    }
+
+    .habit-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .habit-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(59, 130, 246, 0.12);
+      border: 1px solid rgba(59, 130, 246, 0.18);
+      color: var(--text-main);
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+
+    .habit-pill.done {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.22);
+    }
+
+    .panel-note {
+      color: var(--text-muted);
+      margin-top: -10px;
+      margin-bottom: 18px;
+      line-height: 1.5;
+      font-size: 0.95rem;
     }
 
     .widget-card {
@@ -299,7 +372,7 @@
       font-weight: 600;
     }
 
-    select, input {
+    select, input, textarea {
       width: 100%;
       padding: 14px;
       background-color: var(--bg-input);
@@ -308,9 +381,10 @@
       color: white;
       font-size: 1rem;
       transition: border-color 0.2s;
+      font-family: inherit;
     }
 
-    select:focus, input:focus {
+    select:focus, input:focus, textarea:focus {
       outline: none;
       border-color: var(--accent-primary);
     }
@@ -467,6 +541,7 @@
       <nav class="nav-group">
         <button class="nav-item active" id="menu-dash">Dashboard</button>
         <button class="nav-item" id="menu-start">Track Habits</button>
+        <button class="nav-item" id="menu-input">Input Habits</button>
         <button class="nav-item" id="menu-timer">⏱️ Countdown Timer</button>
         <button class="nav-item" id="menu-parent">👨‍👩‍👧 Parent Portal</button>
         <button class="nav-item hidden" style="background-color: rgba(245, 158, 11, 0.08); color: #f59e0b;" id="menu-admin">🛡️ Admin Panel</button>
@@ -491,6 +566,15 @@
             <div class="stat-label">Total Habits Logged</div>
             <div class="stat-value" id="dashboard-score-count">0</div>
           </div>
+        </div>
+
+        <div class="progress-card">
+          <div class="progress-header">
+            <h2 style="margin: 0;">Today's Progress</h2>
+            <div class="stat-value" style="font-size: 1.6rem;" id="dashboard-progress-percent">0%</div>
+          </div>
+          <div class="progress-shell"><div class="progress-fill" id="dashboard-progress-fill"></div></div>
+          <p class="progress-meta" id="dashboard-progress-meta">No daily plan set yet.</p>
         </div>
 
         <div class="widget-card">
@@ -519,6 +603,26 @@
             <input type="text" id="hw-details-field" placeholder="e.g., Run 5km, read 2 chapters">
           </div>
           <button class="btn-action btn-green" id="action-trigger-btn">Start Session</button>
+        </div>
+      </div>
+
+      <div id="panel-input" class="hidden">
+        <div class="widget-card" style="max-width: 760px; padding: 35px;">
+          <h2>Input Habits</h2>
+          <p class="panel-note">Enter today's exact habit array. Use one habit per line or separate habits with commas. This list becomes the Track Habits dropdown for today.</p>
+          <div class="form-unit">
+            <label for="daily-habits-input">Today's Habit Array</label>
+            <textarea id="daily-habits-input" rows="7" placeholder="Read\nMath\nExercise"></textarea>
+          </div>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <button class="btn-action btn-green" style="width: auto; padding: 12px 18px;" id="save-daily-habits-btn">Save Today's Plan</button>
+            <button class="btn-action btn-blue" style="width: auto; padding: 12px 18px;" id="reload-daily-habits-btn">Refresh Plan</button>
+          </div>
+        </div>
+
+        <div class="widget-card" style="margin-top: 20px; max-width: 760px;">
+          <h2>Saved Today</h2>
+          <div id="daily-habits-preview" class="habit-list"></div>
         </div>
       </div>
 
@@ -567,6 +671,16 @@
             </div>
             <button class="btn-action btn-blue" style="width: auto; padding: 10px 20px;" onclick="window.print()">🖨️ Print / Save PDF</button>
           </div>
+        </div>
+
+        <div class="progress-card">
+          <div class="progress-header">
+            <h2 style="margin: 0;">Today's Daily Progress</h2>
+            <div class="stat-value" style="font-size: 1.6rem;" id="parent-progress-percent">0%</div>
+          </div>
+          <div class="progress-shell"><div class="progress-fill" id="parent-progress-fill"></div></div>
+          <p class="progress-meta" id="parent-progress-meta">No daily plan set yet.</p>
+          <div id="parent-habit-list" class="habit-list" style="margin-top: 14px;"></div>
         </div>
 
         <div class="stats-row">
@@ -622,6 +736,15 @@
             <button class="btn-action btn-green" style="background-color: var(--accent-primary);" id="add-event-submit-btn">Add Option</button>
           </div>
         </div>
+        <div class="widget-card" style="margin-top: 20px;">
+          <h2>Manage Habits</h2>
+          <div class="table-container">
+            <table>
+              <thead><tr><th>ID</th><th>Habit</th><th>Category</th><th>Action</th></tr></thead>
+              <tbody id="admin-events-table"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
     </main>
@@ -640,12 +763,18 @@
   let initialTimestamp = null;
   let targetEvent = '';
   let sessionActive = false;
+  let sessionSaveInFlight = false;
+  let currentSessionToken = null;
+  let currentDailyHabits = [];
+  let currentDailyPlanDate = null;
+  let currentAppDateKey = getLocalDateKey();
   let cdInterval = null;
   let cdRemaining = 0;
 
   const NAV_MAP = {
     'menu-dash': { panel: 'panel-dashboard', title: 'Dashboard' },
     'menu-start': { panel: 'panel-start', title: 'Track Habits' },
+    'menu-input': { panel: 'panel-input', title: 'Input Habits' },
     'menu-timer': { panel: 'panel-timer', title: 'Countdown Timer' },
     'menu-parent': { panel: 'panel-parent', title: 'Parent Portal' },
     'menu-admin': { panel: 'panel-admin', title: 'Admin Panel' }
@@ -658,7 +787,117 @@
     setupSessionTracking();
     setupCountdownTimer();
     populateHabitDropdown();
+    setInterval(checkForDateRollover, 60000);
   });
+
+  function getLocalDateKey(date = new Date()) {
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 10);
+  }
+
+  function normalizeHabitEntries(rawValue) {
+    return rawValue
+      .split(/\r?\n|,/)
+      .map(entry => entry.trim())
+      .filter(Boolean);
+  }
+
+  async function checkForDateRollover() {
+    const todayKey = getLocalDateKey();
+    if (todayKey === currentAppDateKey) return;
+
+    currentAppDateKey = todayKey;
+    currentDailyPlanDate = null;
+    currentDailyHabits = [];
+
+    if (currentUser) {
+      await populateHabitDropdown();
+      if (!document.getElementById('panel-input')?.classList.contains('hidden')) {
+        await loadInputHabitsPanel(true);
+      }
+      if (!document.getElementById('panel-dashboard')?.classList.contains('hidden')) {
+        await loadDashboard();
+      }
+      if (!document.getElementById('panel-parent')?.classList.contains('hidden')) {
+        await loadParentReport();
+      }
+    }
+  }
+
+  async function loadDailyPlanHabits(forceRefresh = false) {
+    if (!currentUser) {
+      currentDailyHabits = [];
+      currentDailyPlanDate = null;
+      return [];
+    }
+
+    const planDate = getLocalDateKey();
+    if (!forceRefresh && currentDailyPlanDate === planDate && Array.isArray(currentDailyHabits)) {
+      return currentDailyHabits;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/daily-plans?userId=${currentUser.userId}&date=${planDate}`);
+      const data = res.ok ? await res.json() : { habits: [] };
+      currentDailyPlanDate = planDate;
+      currentDailyHabits = Array.isArray(data.habits) ? data.habits : [];
+      return currentDailyHabits;
+    } catch (err) {
+      console.error('Error fetching daily plan:', err);
+      currentDailyHabits = [];
+      currentDailyPlanDate = planDate;
+      return [];
+    }
+  }
+
+  function renderHabitList(targetId, habits, completedSet = new Set()) {
+    const target = document.getElementById(targetId);
+    if (!target) return;
+
+    target.innerHTML = '';
+
+    if (!habits.length) {
+      target.innerHTML = '<span class="progress-meta">No daily plan set yet.</span>';
+      return;
+    }
+
+    habits.forEach(habit => {
+      const done = completedSet.has(habit);
+      target.innerHTML += `<span class="habit-pill ${done ? 'done' : ''}">${done ? '✓' : '•'} ${habit}</span>`;
+    });
+  }
+
+  function updateProgressUI(prefix, summary) {
+    const percentEl = document.getElementById(`${prefix}-progress-percent`);
+    const fillEl = document.getElementById(`${prefix}-progress-fill`);
+    const metaEl = document.getElementById(`${prefix}-progress-meta`);
+
+    if (percentEl) percentEl.textContent = `${summary.percentage}%`;
+    if (fillEl) fillEl.style.width = `${summary.percentage}%`;
+    if (metaEl) {
+      metaEl.textContent = summary.total > 0
+        ? `${summary.completed} of ${summary.total} planned habits completed today.`
+        : 'No daily plan set yet.';
+    }
+  }
+
+  async function getTodayProgressSummary(activities = []) {
+    const habits = await loadDailyPlanHabits();
+    const planDate = getLocalDateKey();
+
+    const todayActivities = activities.filter(activity => getLocalDateKey(new Date(activity.start_time)) === planDate);
+    const completedSet = new Set(todayActivities.map(activity => activity.event_type));
+    const completed = habits.filter(habit => completedSet.has(habit)).length;
+    const total = habits.length;
+
+    return {
+      habits,
+      completedSet,
+      completed,
+      total,
+      percentage: total > 0 ? Math.round((completed / total) * 100) : 0
+    };
+  }
 
   function checkAuthState() {
     const authView = document.getElementById('view-auth');
@@ -731,6 +970,7 @@
     if (title) title.textContent = nav.title;
 
     if (menuId === 'menu-dash') loadDashboard();
+    if (menuId === 'menu-input') loadInputHabitsPanel();
     if (menuId === 'menu-parent') loadParentReport();
     if (menuId === 'menu-admin' && currentUser?.role === 'admin') populateAdminDashboard();
   }
@@ -826,6 +1066,51 @@
         alert('Failed to connect to server.');
       }
     });
+
+    document.getElementById('save-daily-habits-btn')?.addEventListener('click', async () => {
+      if (!currentUser) {
+        alert('Please log in first.');
+        return;
+      }
+
+      const input = document.getElementById('daily-habits-input');
+      const habits = normalizeHabitEntries(input?.value || '');
+
+      if (habits.length === 0) {
+        alert('Please enter at least one habit for today.');
+        return;
+      }
+
+      const planDate = getLocalDateKey();
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/daily-plans`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUser.userId, planDate, habits })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          currentDailyHabits = Array.isArray(data.habits) ? data.habits : habits;
+          currentDailyPlanDate = planDate;
+          alert('Daily plan saved successfully.');
+          await loadInputHabitsPanel(true);
+          await populateHabitDropdown();
+          await loadDashboard();
+          await loadParentReport();
+        } else {
+          alert(`Error: ${data.message || 'Could not save daily plan.'}`);
+        }
+      } catch (err) {
+        console.error('Error saving daily plan:', err);
+        alert('Failed to connect to server.');
+      }
+    });
+
+    document.getElementById('reload-daily-habits-btn')?.addEventListener('click', async () => {
+      await loadInputHabitsPanel(true);
+    });
   }
 
   async function populateHabitDropdown() {
@@ -833,24 +1118,34 @@
     if (!select) return;
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/events`);
-      let habits = res.ok ? await res.json() : [];
+      const [dailyHabits, globalHabitsRes] = await Promise.all([
+        loadDailyPlanHabits(true),
+        fetch(`${API_BASE_URL}/api/events`)
+      ]);
+
+      const globalHabits = globalHabitsRes.ok ? (await globalHabitsRes.json()).map(event => event.name) : [];
+      const habits = [...new Set([...(globalHabits || []), ...(dailyHabits || [])])];
 
       select.innerHTML = '';
 
-      const defaultOpt = document.createElement('option');
-      defaultOpt.value = 'Homework';
-      defaultOpt.textContent = 'Homework';
-      defaultOpt.selected = true;
-      select.appendChild(defaultOpt);
+      if (habits.length === 0) {
+        const emptyOpt = document.createElement('option');
+        emptyOpt.value = '';
+        emptyOpt.textContent = 'No habits available';
+        emptyOpt.selected = true;
+        emptyOpt.disabled = true;
+        select.appendChild(emptyOpt);
+        select.disabled = true;
+        return;
+      }
 
-      habits.forEach(h => {
-        if (h.name.toLowerCase() !== 'homework') {
-          const opt = document.createElement('option');
-          opt.value = h.name;
-          opt.textContent = h.name;
-          select.appendChild(opt);
-        }
+      select.disabled = false;
+      habits.forEach((habit, index) => {
+        const opt = document.createElement('option');
+        opt.value = habit;
+        opt.textContent = habit;
+        if (index === 0) opt.selected = true;
+        select.appendChild(opt);
       });
     } catch (err) {
       console.error('Error fetching habits:', err);
@@ -872,6 +1167,8 @@
     const detailsInput = document.getElementById('hw-details-field');
 
     triggerBtn?.addEventListener('click', async () => {
+      if (sessionSaveInFlight) return;
+
       if (!sessionActive) {
         targetEvent = habitSelect?.value || '';
         if (!targetEvent) {
@@ -881,6 +1178,8 @@
 
         sessionActive = true;
         initialTimestamp = new Date().toISOString();
+        currentSessionToken = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        currentDailyPlanDate = getLocalDateKey();
         timerSeconds = 0;
 
         heading.textContent = 'Active Session';
@@ -899,9 +1198,12 @@
         clearInterval(activeTimer);
         sessionActive = false;
         setSessionLock(false);
+        sessionSaveInFlight = true;
+        triggerBtn.disabled = true;
 
         const endTime = new Date().toISOString();
         const details = detailsInput?.value.trim() || '';
+        const sessionToken = currentSessionToken;
 
         heading.textContent = 'Configure Session';
         triggerBtn.textContent = 'Start Session';
@@ -918,14 +1220,17 @@
               eventType: targetEvent,
               details,
               startTime: initialTimestamp,
-              endTime
+              endTime,
+              sessionToken,
+              planDate: currentDailyPlanDate || getLocalDateKey()
             })
           });
 
           const data = await res.json();
           if (res.ok) {
-            alert('Session saved successfully!');
+            alert(data.duplicate ? 'Session already saved.' : 'Session saved successfully!');
             if (detailsInput) detailsInput.value = '';
+            currentSessionToken = null;
             loadDashboard();
           } else {
             alert(`Error: ${data.message}`);
@@ -933,6 +1238,9 @@
         } catch (err) {
           console.error('Failed to save session:', err);
           alert('Server communication error.');
+        } finally {
+          sessionSaveInFlight = false;
+          triggerBtn.disabled = false;
         }
       }
     });
@@ -1012,6 +1320,8 @@
 
       const activities = await res.json();
       if (scoreCount) scoreCount.textContent = activities.length;
+        const progress = await getTodayProgressSummary(activities);
+        updateProgressUI('dashboard', progress);
       tbody.innerHTML = '';
 
       if (activities.length === 0) {
@@ -1053,6 +1363,9 @@
       if (!res.ok) throw new Error('Failed to load activities');
 
       const activities = await res.json();
+      const progress = await getTodayProgressSummary(activities);
+      updateProgressUI('parent', progress);
+      renderHabitList('parent-habit-list', progress.habits, progress.completedSet);
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
 
@@ -1099,21 +1412,110 @@
     }
   }
 
+  async function loadInputHabitsPanel(forceRefresh = false) {
+    if (!currentUser) return;
+
+    const textarea = document.getElementById('daily-habits-input');
+    const habits = await loadDailyPlanHabits(forceRefresh);
+
+    if (textarea) {
+      textarea.value = habits.join('\n');
+    }
+
+    renderHabitList('daily-habits-preview', habits);
+  }
+
   async function populateAdminDashboard() {
     const target = document.getElementById('admin-users-table');
-    if (!target) return;
+    const habitsTarget = document.getElementById('admin-events-table');
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/users`);
-      if (!res.ok) return;
+      const [usersRes, habitsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/admin/users`),
+        fetch(`${API_BASE_URL}/api/admin/events`)
+      ]);
 
-      const users = await res.json();
-      target.innerHTML = '';
-      users.forEach(u => {
-        target.innerHTML += `<tr><td>${u.id}</td><td><strong>${u.username}</strong></td><td><code>${u.role}</code></td></tr>`;
-      });
+      if (target) {
+        target.innerHTML = '';
+
+        if (usersRes.ok) {
+          const users = await usersRes.json();
+          users.forEach(u => {
+            target.innerHTML += `<tr><td>${u.id}</td><td><strong>${u.username}</strong></td><td><code>${u.role}</code></td></tr>`;
+          });
+        } else {
+          target.innerHTML = '<tr><td colspan="3">Unable to load users.</td></tr>';
+        }
+      }
+
+      if (habitsTarget) {
+        habitsTarget.innerHTML = '';
+        if (habitsRes.ok) {
+          const habits = await habitsRes.json();
+          habits.forEach(habit => {
+            const encodedHabitName = encodeURIComponent(habit.name);
+            habitsTarget.innerHTML += `
+              <tr>
+                <td>${habit.id}</td>
+                <td><strong>${habit.name}</strong></td>
+                <td><code>${habit.category || 'general'}</code></td>
+                <td>
+                  <button
+                    class="btn-action btn-red delete-habit-btn"
+                    style="width: auto; padding: 8px 14px;"
+                    data-habit-id="${habit.id}"
+                    data-habit-name="${encodedHabitName}"
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            `;
+          });
+        } else {
+          habitsTarget.innerHTML = '<tr><td colspan="4">Unable to load habits.</td></tr>';
+        }
+
+        habitsTarget.querySelectorAll('.delete-habit-btn').forEach(button => {
+          button.addEventListener('click', async () => {
+            const eventId = Number(button.dataset.habitId);
+            const habitName = decodeURIComponent(button.dataset.habitName || '');
+            await deleteHabit(eventId, habitName);
+          });
+        });
+      }
     } catch (err) {
       console.error('Error loading admin users:', err);
+    }
+  }
+
+  async function deleteHabit(eventId, habitName) {
+    if (!currentUser || currentUser.role !== 'admin') {
+      alert('Admin access required.');
+      return;
+    }
+
+    if (!confirm(`Delete habit "${habitName}"?`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/events/${eventId}`, {
+        method: 'DELETE'
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        alert(data.message || 'Habit deleted.');
+        await populateAdminDashboard();
+        await populateHabitDropdown();
+      } else {
+        alert(`Error: ${data.message || 'Could not delete habit.'}`);
+      }
+    } catch (err) {
+      console.error('Error deleting habit:', err);
+      alert('Failed to connect to server.');
     }
   }
 </script>

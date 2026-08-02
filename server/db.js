@@ -34,7 +34,18 @@ export async function initDb() {
         details TEXT,
         start_time TIMESTAMPTZ,
         end_time TIMESTAMPTZ,
-        duration_seconds INT
+        duration_seconds INT,
+        session_token TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS daily_plans (
+        id SERIAL PRIMARY KEY,
+        user_id INT REFERENCES users(id) ON DELETE CASCADE,
+        plan_date DATE NOT NULL,
+        habits JSONB NOT NULL DEFAULT '[]'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id, plan_date)
       );
     `);
 
@@ -45,6 +56,19 @@ export async function initDb() {
       ALTER TABLE activities ADD COLUMN IF NOT EXISTS start_time TIMESTAMPTZ;
       ALTER TABLE activities ADD COLUMN IF NOT EXISTS end_time TIMESTAMPTZ;
       ALTER TABLE activities ADD COLUMN IF NOT EXISTS duration_seconds INT;
+      ALTER TABLE activities ADD COLUMN IF NOT EXISTS session_token TEXT;
+    `);
+
+    await client.query(`
+      ALTER TABLE daily_plans ADD COLUMN IF NOT EXISTS habits JSONB NOT NULL DEFAULT '[]'::jsonb;
+      ALTER TABLE daily_plans ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+      ALTER TABLE daily_plans ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+      CREATE UNIQUE INDEX IF NOT EXISTS daily_plans_user_date_unique_idx ON daily_plans (user_id, plan_date);
+    `);
+
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS activities_session_token_unique_idx
+      ON activities (session_token);
     `);
 
     // Ensure events.name is unique (older tables may lack this constraint)
