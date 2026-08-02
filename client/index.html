@@ -248,6 +248,82 @@
       font-size: 0.95rem;
     }
 
+    .habit-input-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .habit-input-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    .habit-input-row label {
+      font-size: 0.8rem;
+      margin-bottom: 6px;
+    }
+
+    .habit-input-field {
+      min-width: 0;
+    }
+
+    .btn-icon {
+      width: 48px;
+      height: 48px;
+      padding: 0;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      background: var(--bg-input);
+      color: var(--text-main);
+      font-size: 1.4rem;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-icon:hover:not(:disabled) {
+      border-color: var(--accent-primary);
+      color: var(--accent-primary);
+    }
+
+    .btn-icon.remove:hover:not(:disabled) {
+      border-color: var(--accent-error);
+      color: var(--accent-error);
+    }
+
+    .btn-add-row {
+      margin-top: 4px;
+      width: 100%;
+      padding: 12px;
+      border: 1px dashed var(--border-color);
+      border-radius: var(--radius-md);
+      background: transparent;
+      color: var(--accent-primary);
+      font-size: 1.4rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-add-row:hover {
+      border-color: var(--accent-primary);
+      background: rgba(59, 130, 246, 0.08);
+    }
+
+    @media (max-width: 640px) {
+      .habit-input-row {
+        grid-template-columns: 1fr;
+      }
+
+      .habit-input-row .btn-icon {
+        width: 100%;
+      }
+    }
+
     .widget-card {
       background-color: var(--bg-card);
       border-radius: var(--radius-lg);
@@ -609,14 +685,14 @@
       <div id="panel-input" class="hidden">
         <div class="widget-card" style="max-width: 760px; padding: 35px;">
           <h2>Input Habits</h2>
-          <p class="panel-note">Enter today's exact habit array. Use one habit per line or separate habits with commas. This list becomes the Track Habits dropdown for today.</p>
+          <p class="panel-note">Add today's habits with a category and name. Saved habits appear in Track Habits as <strong>category: habit</strong>.</p>
           <div class="form-unit">
-            <label for="daily-habits-input">Today's Habit Array</label>
-            <textarea id="daily-habits-input" rows="7" placeholder="Read\nMath\nExercise"></textarea>
+            <label>Today's Habits</label>
+            <div id="habit-input-rows" class="habit-input-rows"></div>
+            <button type="button" class="btn-add-row" id="add-habit-row-btn" aria-label="Add habit row">+</button>
           </div>
           <div style="display: flex; gap: 12px; flex-wrap: wrap;">
             <button class="btn-action btn-green" style="width: auto; padding: 12px 18px;" id="save-daily-habits-btn">Save Today's Plan</button>
-            <button class="btn-action btn-blue" style="width: auto; padding: 12px 18px;" id="reload-daily-habits-btn">Refresh Plan</button>
           </div>
         </div>
 
@@ -780,7 +856,8 @@
     'menu-admin': { panel: 'panel-admin', title: 'Admin Panel' }
   };
 
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
+    await validateStoredSession();
     checkAuthState();
     setupNavigation();
     setupForms();
@@ -790,16 +867,134 @@
     setInterval(checkForDateRollover, 60000);
   });
 
+  function invalidateSession(message = 'Your session expired. Please log in again.') {
+    currentUser = null;
+    localStorage.removeItem('habit_tracker_user');
+    alert(message);
+    location.reload();
+  }
+
+  async function validateStoredSession() {
+    if (!currentUser?.userId) return;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/session?userId=${currentUser.userId}`);
+      if (!res.ok) {
+        invalidateSession();
+        return;
+      }
+
+      currentUser = await res.json();
+      localStorage.setItem('habit_tracker_user', JSON.stringify(currentUser));
+    } catch (err) {
+      console.error('Session validation failed:', err);
+    }
+  }
+
+  function handleAuthFailure(res, data) {
+    if (res.status === 401) {
+      invalidateSession(data?.message || 'Your session expired. Please log in again.');
+      return true;
+    }
+    return false;
+  }
+
   function getLocalDateKey(date = new Date()) {
     const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
     return localDate.toISOString().slice(0, 10);
   }
 
-  function normalizeHabitEntries(rawValue) {
-    return rawValue
-      .split(/\r?\n|,/)
-      .map(entry => entry.trim())
-      .filter(Boolean);
+  function parseHabitEntry(entry) {
+    const idx = entry.indexOf(':');
+    if (idx === -1) {
+      return { category: '', habit: entry };
+    }
+
+    return {
+      category: entry.slice(0, idx).trim(),
+      habit: entry.slice(idx + 1).trim()
+    };
+  }
+
+  function formatHabitEntry(category, habit) {
+    return `${category.trim()}:${habit.trim()}`;
+  }
+
+  function updateHabitRowControls() {
+    const container = document.getElementById('habit-input-rows');
+    if (!container) return;
+
+    const removeButtons = container.querySelectorAll('.remove-habit-row-btn');
+    removeButtons.forEach(button => {
+      button.style.visibility = removeButtons.length > 1 ? 'visible' : 'hidden';
+      button.disabled = removeButtons.length <= 1;
+    });
+  }
+
+  function createHabitInputRow(category = '', habit = '') {
+    const row = document.createElement('div');
+    row.className = 'habit-input-row';
+    row.innerHTML = `
+      <div class="habit-input-field">
+        <label>Category</label>
+        <input type="text" class="habit-category-input" placeholder="e.g., School" value="${category.replace(/"/g, '&quot;')}">
+      </div>
+      <div class="habit-input-field">
+        <label>Habit</label>
+        <input type="text" class="habit-name-input" placeholder="e.g., Math homework" value="${habit.replace(/"/g, '&quot;')}">
+      </div>
+      <button type="button" class="btn-icon remove remove-habit-row-btn" aria-label="Remove row">−</button>
+    `;
+
+    row.querySelector('.remove-habit-row-btn')?.addEventListener('click', () => {
+      const container = document.getElementById('habit-input-rows');
+      if (!container || container.children.length <= 1) return;
+      row.remove();
+      updateHabitRowControls();
+    });
+
+    return row;
+  }
+
+  function renderHabitInputRows(habits = []) {
+    const container = document.getElementById('habit-input-rows');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    const entries = habits.length ? habits.map(parseHabitEntry) : [{ category: '', habit: '' }];
+    entries.forEach(({ category, habit }) => {
+      container.appendChild(createHabitInputRow(category, habit));
+    });
+
+    updateHabitRowControls();
+  }
+
+  function collectHabitRows() {
+    const rows = document.querySelectorAll('#habit-input-rows .habit-input-row');
+    const habits = [];
+    const seen = new Set();
+
+    for (const row of rows) {
+      const category = row.querySelector('.habit-category-input')?.value.trim() || '';
+      const habit = row.querySelector('.habit-name-input')?.value.trim() || '';
+
+      if (!category && !habit) continue;
+
+      if (!category || !habit) {
+        return { error: 'Each habit row needs both a category and a habit name.' };
+      }
+
+      const formatted = formatHabitEntry(category, habit);
+      if (seen.has(formatted)) {
+        return { error: `Duplicate habit: ${formatted}` };
+      }
+
+      seen.add(formatted);
+      habits.push(formatted);
+    }
+
+    return { habits };
   }
 
   async function checkForDateRollover() {
@@ -863,7 +1058,7 @@
 
     habits.forEach(habit => {
       const done = completedSet.has(habit);
-      target.innerHTML += `<span class="habit-pill ${done ? 'done' : ''}">${done ? '✓' : '•'} ${habit}</span>`;
+      target.innerHTML += `<span class="habit-pill ${done ? 'done' : ''}">${done ? '✓' : ''} ${habit}</span>`;
     });
   }
 
@@ -1067,14 +1262,22 @@
       }
     });
 
+    document.getElementById('add-habit-row-btn')?.addEventListener('click', () => {
+      document.getElementById('habit-input-rows')?.appendChild(createHabitInputRow());
+      updateHabitRowControls();
+    });
+
     document.getElementById('save-daily-habits-btn')?.addEventListener('click', async () => {
       if (!currentUser) {
         alert('Please log in first.');
         return;
       }
 
-      const input = document.getElementById('daily-habits-input');
-      const habits = normalizeHabitEntries(input?.value || '');
+      const { habits, error } = collectHabitRows();
+      if (error) {
+        alert(error);
+        return;
+      }
 
       if (habits.length === 0) {
         alert('Please enter at least one habit for today.');
@@ -1099,7 +1302,7 @@
           await populateHabitDropdown();
           await loadDashboard();
           await loadParentReport();
-        } else {
+        } else if (!handleAuthFailure(res, data)) {
           alert(`Error: ${data.message || 'Could not save daily plan.'}`);
         }
       } catch (err) {
@@ -1108,9 +1311,6 @@
       }
     });
 
-    document.getElementById('reload-daily-habits-btn')?.addEventListener('click', async () => {
-      await loadInputHabitsPanel(true);
-    });
   }
 
   async function populateHabitDropdown() {
@@ -1118,20 +1318,14 @@
     if (!select) return;
 
     try {
-      const [dailyHabits, globalHabitsRes] = await Promise.all([
-        loadDailyPlanHabits(true),
-        fetch(`${API_BASE_URL}/api/events`)
-      ]);
-
-      const globalHabits = globalHabitsRes.ok ? (await globalHabitsRes.json()).map(event => event.name) : [];
-      const habits = [...new Set([...(globalHabits || []), ...(dailyHabits || [])])];
+      const habits = await loadDailyPlanHabits(true);
 
       select.innerHTML = '';
 
       if (habits.length === 0) {
         const emptyOpt = document.createElement('option');
         emptyOpt.value = '';
-        emptyOpt.textContent = 'No habits available';
+        emptyOpt.textContent = 'No habits available — add some in Input Habits';
         emptyOpt.selected = true;
         emptyOpt.disabled = true;
         select.appendChild(emptyOpt);
@@ -1415,13 +1609,8 @@
   async function loadInputHabitsPanel(forceRefresh = false) {
     if (!currentUser) return;
 
-    const textarea = document.getElementById('daily-habits-input');
     const habits = await loadDailyPlanHabits(forceRefresh);
-
-    if (textarea) {
-      textarea.value = habits.join('\n');
-    }
-
+    renderHabitInputRows(habits);
     renderHabitList('daily-habits-preview', habits);
   }
 

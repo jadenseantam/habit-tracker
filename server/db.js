@@ -89,12 +89,6 @@ export async function initDb() {
       VALUES ('jadentam', 'Jaden0309', 'admin')
       ON CONFLICT (username) DO NOTHING;
     `);
-
-  const checkEvents = await client.query('SELECT COUNT(*) FROM events');
-  if (parseInt(checkEvents.rows[0].count) === 0) {
-    await client.query(`INSERT INTO events (name, category) VALUES ('Homework', 'general')`);
-  }
-
     console.log('✅ Database connected and verified safely!');
   } catch (err) {
     console.error('❌ Error initializing database:', err);

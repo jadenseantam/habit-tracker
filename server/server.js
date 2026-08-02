@@ -10,7 +10,35 @@ app.use(express.json());
 
 initDb().catch(console.error);
 
+async function getUserById(userId) {
+  const result = await pool.query(
+    'SELECT id, username, role FROM users WHERE id = $1',
+    [userId]
+  );
+  return result.rows[0] || null;
+}
+
 // ------------------- AUTH ROUTES -------------------
+
+app.get('/api/auth/session', async (req, res) => {
+  const userId = Number.parseInt(req.query.userId, 10);
+
+  if (!Number.isInteger(userId)) {
+    return res.status(400).json({ message: 'Missing or invalid userId parameter.' });
+  }
+
+  try {
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(401).json({ message: 'Session invalid. Please log in again.' });
+    }
+
+    res.json({ userId: user.id, username: user.username, role: user.role });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error validating session.' });
+  }
+});
+
 
 app.post('/api/auth/register', async (req, res) => {
   const { username, password } = req.body;
@@ -93,6 +121,11 @@ app.post('/api/daily-plans', async (req, res) => {
     .filter(Boolean);
 
   try {
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(401).json({ message: 'Session invalid. Please log in again.' });
+    }
+
     const result = await pool.query(
       `INSERT INTO daily_plans (user_id, plan_date, habits, updated_at)
        VALUES ($1, $2, $3, NOW())
@@ -109,6 +142,9 @@ app.post('/api/daily-plans', async (req, res) => {
     });
   } catch (err) {
     console.error('❌ Error saving daily plan:', err);
+    if (err.code === '23503') {
+      return res.status(401).json({ message: 'Session invalid. Please log in again.' });
+    }
     res.status(500).json({ message: err.message });
   }
 });
